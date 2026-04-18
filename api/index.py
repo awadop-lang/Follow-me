@@ -10,13 +10,12 @@ db = {
 }
 times = {}
 
-# --- INTERFACE TACTIQUE V5.7 (FINAL PHOTO FIX + DURATION) ---
 HTML_CODE = """
 <!DOCTYPE html>
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <title>TACTICAL_HUD // NOX_V5.7</title>
+    <title>TACTICAL_HUD // NOX_V5.8</title>
     <style>
         :root { --p: #00ffff; --bg: #010103; --panel: #05050a; --font: 'Fira Code', monospace; }
         body { background: var(--bg); color: #a0c0c0; font-family: var(--font); margin: 0; padding: 15px; height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
@@ -24,65 +23,49 @@ HTML_CODE = """
         
         .grid { display: grid; grid-template-columns: 512px 1fr 300px; gap: 15px; flex: 1; overflow: hidden; }
 
-        /* Carte */
         .map-wrapper { width: 512px; height: 512px; border: 1px solid #222; background: #000; position: relative; overflow: hidden; }
         #map-bg { width: 100%; height: 100%; background-size: 100% 100%; position: absolute; opacity: 0.8; filter: brightness(0.6); }
         canvas { position: absolute; top:0; left:0; z-index: 10; }
         
-        /* Liste Agents */
         .list { background: var(--panel); border: 1px solid #111; padding: 10px; overflow-y: auto; border-left: 2px solid var(--p); }
         .card { background: rgba(255,255,255,0.01); border: 1px solid #1a1a1a; padding: 12px; margin-bottom: 8px; cursor: pointer; transition: 0.2s; }
         .card:hover { background: rgba(0,255,255,0.1); border-color: var(--p); }
 
-        /* Colonne Inspecteur */
         .inspector { background: #000; border: 1px solid #222; display: flex; flex-direction: column; border-top: 2px solid var(--p); }
         .inspect-header { padding: 10px; font-size: 10px; color: var(--p); background: rgba(0,255,255,0.05); text-align: center; letter-spacing: 2px; }
         
-        .inspect-photo-area { width: 100%; aspect-ratio: 1; background: #0a0a0a; border-bottom: 1px solid #222; display: flex; align-items: center; justify-content: center; overflow: hidden; position: relative; }
-        #i-img { width: 100%; height: 100%; object-fit: cover; z-index: 2; position: absolute; top:0; left:0; display:none; }
+        .inspect-photo-area { width: 100%; aspect-ratio: 1; background: #0a0a0a; border-bottom: 1px solid #222; display: flex; align-items: center; justify-content: center; position: relative; }
+        #i-img { width: 100%; height: 100%; object-fit: cover; z-index: 2; position: absolute; top:0; left:0; border: 0; }
         .placeholder { font-size: 10px; opacity: 0.3; text-align: center; z-index: 1; }
 
         .inspect-details { padding: 15px; flex: 1; overflow-y: auto; }
         .label { font-size: 9px; color: var(--p); opacity: 0.6; margin-top: 12px; text-transform: uppercase; }
         .val { font-size: 13px; color: #fff; font-weight: bold; margin-bottom: 4px; }
 
-        .btn { width: 100%; padding: 12px; background: var(--p); color: #000; border: none; font-family: inherit; font-weight: bold; cursor: pointer; margin-top: 20px; display: none; }
+        .btn { width: 100%; padding: 12px; background: var(--p); color: #000; border: none; font-family: inherit; font-weight: bold; cursor: pointer; margin-top: 20px; text-transform: uppercase; }
     </style>
 </head>
 <body>
     <header>
-        <div style="font-size: 16px; font-weight: bold; letter-spacing: 4px; color: var(--p);">[ TACTICAL_HUD_V5.7 ]</div>
+        <div style="font-size: 16px; font-weight: bold; letter-spacing: 4px; color: var(--p);">[ TACTICAL_HUD_V5.8 ]</div>
         <div id="sim-info" style="font-size: 10px;">SIGNAL_ACTIVE</div>
     </header>
 
     <div class="grid">
-        <div class="map-wrapper">
-            <div id="map-bg"></div>
-            <canvas id="cv" width="512" height="512"></canvas>
-        </div>
-
+        <div class="map-wrapper"><div id="map-bg"></div><canvas id="cv" width="512" height="512"></canvas></div>
         <div class="list" id="feed"></div>
-
         <div class="inspector">
             <div class="inspect-header">// TARGET_INVESTIGATION</div>
             <div class="inspect-photo-area">
-                <img id="i-img" src="" onload="this.style.display='block'">
-                <div class="placeholder">LOADING_DATA...<br><span style="font-size:8px;">(Photo if available)</span></div>
+                <img id="i-img" src="" style="display:none;" onload="this.style.display='block'">
+                <div class="placeholder">CHARGEMENT PHOTO...<br><span style="font-size:8px;">(Si disponible publiquement)</span></div>
             </div>
             <div class="inspect-details">
-                <div class="label">Identité</div>
-                <div id="i-name" class="val">---</div>
-                
-                <div class="label">Temps de présence</div>
-                <div id="i-time" class="val" style="color: var(--p);">00m 00s</div>
-
-                <div class="label">Localisation</div>
-                <div id="i-pos" class="val">---</div>
-                
-                <div class="label">UUID</div>
-                <div id="i-key" class="val" style="font-size:10px; color:#444;">---</div>
-
-                <button id="i-btn" class="btn">PROFIL COMPLET</button>
+                <div class="label">Agent</div><div id="i-name" class="val">---</div>
+                <div class="label">Temps de présence</div><div id="i-time" class="val" style="color: var(--p);">00m 00s</div>
+                <div class="label">Position</div><div id="i-pos" class="val">---</div>
+                <div class="label">UUID</div><div id="i-key" class="val" style="font-size:10px; color:#444;">---</div>
+                <button id="i-btn" class="btn" style="display:none;">Profil Web</button>
             </div>
         </div>
     </div>
@@ -96,8 +79,7 @@ HTML_CODE = """
 
         function fmtTime(s) {
             const m = Math.floor(s/60);
-            const sec = Math.floor(s%60);
-            return `${m}m ${sec}s`;
+            return `${m}m ${Math.floor(s%60)}s`;
         }
 
         function showProfile(av) {
@@ -105,15 +87,10 @@ HTML_CODE = """
             const img = document.getElementById('i-img');
             const btn = document.getElementById('i-btn');
             
-            // Nouvelle URL plus robuste pour la photo
             img.style.display = 'none';
-            img.src = `https://secondlife.com/app/image/${av.img_id || '00000000-0000-0000-0000-000000000000'}/2`;
+            // Tentative 1: via le service d'avatar (plus fiable pour le web)
+            img.src = `https://id-service.secondlife.com/avatars/${av.key}/profile_image.png`;
             
-            // Si l'avatar n'envoie pas d'ID d'image, on utilise l'ID de l'agent
-            if(!av.img_id) {
-                img.src = `https://id-service.secondlife.com/avatars/${av.key}/profile_image.png`;
-            }
-
             document.getElementById('i-name').innerText = av.name.toUpperCase();
             document.getElementById('i-key').innerText = av.key;
             btn.style.display = 'block';
@@ -124,7 +101,6 @@ HTML_CODE = """
             try {
                 const r = await fetch('/api');
                 const d = await r.json();
-                
                 document.getElementById('sim-info').innerText = `REGION: ${d.region.toUpperCase()}`;
                 document.getElementById('map-bg').style.backgroundImage = `url('https://map.secondlife.com/map-1-${d.coords.x}-${d.coords.y}-objects.jpg')`;
                 
@@ -166,3 +142,28 @@ HTML_CODE = """
     </script>
 </body>
 </html>
+"""
+
+@app.route('/api', methods=['GET', 'POST'])
+def handle():
+    global db, times
+    if request.method == 'POST':
+        try:
+            data = request.json
+            db["region"] = data.get("region", "UNK")
+            db["coords"] = data.get("grid_coords", {"x":0, "y":0})
+            active = []
+            now = time.time()
+            for av in data.get("avatars", []):
+                uid = av.get("key")
+                if uid:
+                    if uid not in times: times[uid] = now
+                    av["start_time"] = times[uid]
+                    active.append(av)
+            db["avatars"] = active
+            return "OK", 200
+        except: return "ERR", 500
+    return jsonify(db)
+
+@app.route('/')
+def home(): return render_template_string(HTML_CODE)
