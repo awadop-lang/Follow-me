@@ -1,16 +1,4 @@
-from flask import Flask, request, jsonify, render_template_string, session, redirect, url_for
-import time
-
-app = Flask(__name__)
-app.secret_key = "NOX_ZETA_FIX_RECOVERY_V12"
-
-# Base de données
-users_db = {
-    "admin": {
-        "pw": "1234", "region": "OFFLINE", "coords": {"x":0, "y":0}, 
-        "avatars": [], "history": {}, "watchlist": [], "tz": "Europe/Paris"
-    }
-}
+# ... (Gardez le début du code Flask identique jusqu'à INTERFACE_HTML) ...
 
 INTERFACE_HTML = """
 <!DOCTYPE html>
@@ -30,15 +18,19 @@ INTERFACE_HTML = """
         .resizer:hover { background: var(--cyan); }
         .col-header { padding: 15px; border-bottom: 1px solid var(--border); font-family: 'Orbitron'; font-size: 11px; color: var(--magenta); background: rgba(0,0,0,0.5); text-transform: uppercase; }
         .scroll-area { flex: 1; overflow-y: auto; padding: 12px; scrollbar-width: thin; }
+        
         .item { background: rgba(255,255,255,0.02); border: 1px solid var(--border); padding: 12px; margin-bottom: 10px; display:flex; justify-content:space-between; align-items:center;}
         .item.watched { border-left: 4px solid var(--red); background: rgba(255, 49, 49, 0.05); }
         .name { color: var(--cyan); font-weight: 700; font-size: 14px; font-family: 'Orbitron'; cursor: pointer; }
+        .pos-label { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #666; margin-top: 2px; }
         .profile-link { color: #555; text-decoration: none; font-size: 12px; margin-left: 5px; }
+        
         .log-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; width:100%; }
         .time-badge { background: rgba(0,0,0,0.5); padding: 6px; border-radius: 3px; border: 1px solid rgba(255,255,255,0.1); }
         .time-label { font-size: 8px; text-transform: uppercase; color: #888; display: block; }
         .time-value { font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 700; color: #fff; }
         .val-in { color: var(--green); } .val-out { color: var(--red); }
+        
         .action-btn { background: transparent; border: 1px solid var(--cyan); color: var(--cyan); font-family: 'Orbitron'; width: 28px; height: 28px; cursor: pointer; }
         .status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 5px; }
         .online { background: var(--green); box-shadow: 0 0 8px var(--green); } .offline { background: #444; }
@@ -49,7 +41,7 @@ INTERFACE_HTML = """
 </head>
 <body onload="initApp()">
     <header>
-        <div class="logo">NOX//ZETA v1.2.3</div>
+        <div class="logo">NOX//ZETA v1.2.4</div>
         <div style="display:flex; align-items:center; gap:10px;">
             <select id="tz-select" class="time-selector" onchange="updateUI()"></select>
             <div style="font-family:monospace; font-size:12px; color:var(--cyan);">[ {{ session['user'].upper() }} ]</div>
@@ -92,10 +84,13 @@ INTERFACE_HTML = """
                 if(data.coords) document.getElementById('map-bg').style.backgroundImage = `url('https://map.secondlife.com/map-1-${data.coords.x}-${data.coords.y}-objects.jpg')`;
 
                 document.getElementById('scan-list').innerHTML = avatars.map(av => `
-                    <div class="item" style="${selectedAgent === av.name ? 'border: 1px solid var(--cyan);' : ''}">
+                    <div class="item" style="${selectedAgent === av.name ? 'border: 1px solid var(--cyan); background: rgba(0,255,255,0.05);' : ''}">
                         <div>
-                            <span class="name" onclick="selectedAgent='${av.name}'">${av.name}</span>
-                            <a href="https://my.secondlife.com/${av.name.replace(/ /g, '.')}" target="_blank" class="profile-link">🔗</a>
+                            <div>
+                                <span class="name" onclick="selectedAgent='${av.name}'">${av.name}</span>
+                                <a href="https://my.secondlife.com/${av.name.replace(/ /g, '.')}" target="_blank" class="profile-link">🔗</a>
+                            </div>
+                            <div class="pos-label">COORD: ${Math.round(av.x)}, ${Math.round(av.y)}</div>
                         </div>
                         <button class="action-btn" onclick="toggleWatch('${av.name}')">${watchlist.includes(av.name)?'✖':'+'}</button>
                     </div>`).join('');
@@ -103,9 +98,16 @@ INTERFACE_HTML = """
                 document.getElementById('watch-list').innerHTML = watchlist.map(name => {
                     const hist = data.history[name] || {in: null, out: null};
                     const isOnline = avatars.find(a => a.name === name);
+                    const posInfo = isOnline ? `<div class="pos-label">LIVE: ${Math.round(isOnline.x)}, ${Math.round(isOnline.y)}</div>` : '<div class="pos-label">LAST SEEN: OFFLINE</div>';
+                    
                     return `<div class="item watched" style="flex-direction:column; align-items:flex-start;">
                         <div style="width:100%; display:flex; justify-content:space-between;">
-                            <span><span class="status-dot ${isOnline?'online':'offline'}"></span><span class="name" onclick="selectedAgent='${name}'">${name}</span><a href="https://my.secondlife.com/${name.replace(/ /g, '.')}" target="_blank" class="profile-link">🔗</a></span>
+                            <span>
+                                <span class="status-dot ${isOnline?'online':'offline'}"></span>
+                                <span class="name" onclick="selectedAgent='${name}'">${name}</span>
+                                <a href="https://my.secondlife.com/${name.replace(/ /g, '.')}" target="_blank" class="profile-link">🔗</a>
+                                ${posInfo}
+                            </span>
                             <button class="action-btn" onclick="toggleWatch('${name}')" style="border-color:var(--red); color:var(--red); height:20px; width:20px; font-size:10px;">✖</button>
                         </div>
                         <div class="log-grid">
@@ -134,61 +136,9 @@ INTERFACE_HTML = """
             updateUI();
         }
 
-        function initApp() { setInterval(updateUI, 2000); updateUI(); }
+        function initApp() { setInterval(updateUI, 1000); updateUI(); }
     </script>
 </body>
 </html>
 """
-
-@app.route('/', methods=['GET', 'POST'])
-def index():
-    if request.method == 'POST':
-        data = request.get_json(silent=True) or {}
-        user = data.get("operator_id", "").lower()
-        if user in users_db:
-            now_ts = time.time()
-            new_avs = data.get('avatars', [])
-            names = [a['name'] for a in new_avs]
-            hist = users_db[user].setdefault("history", {})
-            for n in names:
-                if n not in hist or not hist[n].get('active'): hist[n] = {'in': now_ts, 'out': "---", 'active': True}
-            for n, s in list(hist.items()):
-                if s.get('active') and n not in names: s['out'] = now_ts; s['active'] = False
-            users_db[user].update({'region': data.get('region'), 'coords': data.get('grid_coords'), 'avatars': new_avs})
-            return "OK", 200
-        return "USER_NOT_FOUND", 404
-    if 'user' not in session: return redirect(url_for('login'))
-    return render_template_string(INTERFACE_HTML)
-
-@app.route('/toggle_watch', methods=['POST'])
-def toggle_watch():
-    if 'user' not in session: return "Auth Error", 401
-    name = request.json.get('name')
-    u = session['user']
-    if name in users_db[u]['watchlist']: users_db[u]['watchlist'].remove(name)
-    else: users_db[u]['watchlist'].append(name)
-    return jsonify({"status": "ok"})
-
-@app.route('/api_data')
-def api_data(): return jsonify(users_db.get(session.get('user'), {}))
-
-@app.route('/login', methods=['GET', 'POST'])
-def login():
-    if request.method == 'POST':
-        u, p = request.form.get('u', '').lower(), request.form.get('p', '')
-        if u in users_db and users_db[u]['pw'] == p:
-            session['user'] = u
-            return redirect(url_for('index'))
-    return """<body style="background:#020205; color:#0ff; font-family:'Orbitron'; display:flex; justify-content:center; align-items:center; height:100vh; margin:0;"><form method="POST" style="border:1px solid #0ff; padding:40px; background:rgba(0,255,255,0.05); text-align:center;"><h2>NOX_AUTH</h2><input name="u" placeholder="USER" required style="background:transparent; border:1px solid #0ff; color:white; padding:10px; margin-bottom:10px; display:block; width:220px;"><input type="password" name="p" placeholder="PASS" required style="background:transparent; border:1px solid #0ff; color:white; padding:10px; margin-bottom:20px; display:block; width:220px;"><button type="submit" style="background:#0ff; border:none; padding:10px; width:100%; font-weight:bold; cursor:pointer;">LOGIN</button><br><br><a href="/register" style="color:#555; font-size:10px; text-decoration:none;">CREATE ACCOUNT</a></form></body>"""
-
-@app.route('/register', methods=['GET', 'POST'])
-def register():
-    if request.method == 'POST':
-        u, p = request.form.get('u', '').lower(), request.form.get('p', '')
-        if u not in users_db:
-            users_db[u] = {"pw": p, "region": "OFFLINE", "coords": {"x":0, "y":0}, "avatars": [], "history": {}, "watchlist": []}
-            return redirect(url_for('login'))
-    return """<body style="background:#020205; color:#0ff; font-family:'Orbitron'; display:flex; justify-content:center; align-items:center; height:100vh; margin:0;"><form method="POST" style="border:1px solid #0ff; padding:40px; background:rgba(0,255,255,0.05); text-align:center;"><h2>NOX_REGISTER</h2><input name="u" placeholder="NAME" required style="background:transparent; border:1px solid #0ff; color:white; padding:10px; margin-bottom:10px; display:block; width:220px;"><input type="password" name="p" placeholder="PASS" required style="background:transparent; border:1px solid #0ff; color:white; padding:10px; margin-bottom:20px; display:block; width:220px;"><button type="submit" style="background:#0ff; border:none; padding:10px; width:100%; font-weight:bold; cursor:pointer;">REGISTER</button></form></body>"""
-
-@app.route('/logout')
-def logout(): session.clear(); return redirect(url_for('login'))
+# ... (Gardez le reste du code Flask identique) ...
