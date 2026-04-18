@@ -15,7 +15,7 @@ HTML_CODE = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NOX_TACTICAL_V7.9</title>
+    <title>NOX_TACTICAL_V8.0</title>
     <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@300;500&family=Rajdhani:wght@300;500;700&display=swap" rel="stylesheet">
     <style>
         :root { 
@@ -25,11 +25,8 @@ HTML_CODE = """
 
         * { box-sizing: border-box; }
         body { 
-            background: var(--bg); 
-            color: #c0d0d0; 
-            font-family: 'Rajdhani', sans-serif; 
-            margin: 0; padding: 15px; height: 100vh; overflow: hidden; 
-            display: flex; flex-direction: column;
+            background: var(--bg); color: #c0d0d0; font-family: 'Rajdhani', sans-serif; 
+            margin: 0; padding: 15px; height: 100vh; overflow: hidden; display: flex; flex-direction: column;
             background-image: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
             background-size: 100% 2px, 3px 100%;
         }
@@ -41,9 +38,8 @@ HTML_CODE = """
             box-shadow: 0 0 15px rgba(0, 255, 255, 0.1); flex-shrink: 0;
         }
 
-        .main-container { display: flex; flex: 1; overflow: hidden; gap: 0; border: 1px solid var(--border); }
+        .main-container { display: flex; flex: 1; overflow: hidden; border: 1px solid var(--border); }
 
-        /* GAUCHE */
         .left-zone { display: flex; flex-direction: column; flex: 1; min-width: 532px; overflow: hidden; background: rgba(0,0,0,0.4); }
         .map-wrapper { width: 512px; height: 512px; margin: 10px; background: #000; position: relative; flex-shrink: 0; border: 1px solid #222; }
         #map-bg { width: 100%; height: 100%; background-size: cover; position: absolute; opacity: 0.5; filter: contrast(1.2) brightness(0.6) grayscale(0.5); }
@@ -51,56 +47,49 @@ HTML_CODE = """
 
         .watchlist-panel { flex: 1; background: var(--panel); border-top: 2px solid var(--magenta); padding: 15px; display: flex; flex-direction: column; overflow: hidden; }
 
-        /* RESIZER */
-        .resizer { 
-            width: 10px; background: #0a0a10; cursor: col-resize; 
-            transition: 0.3s; z-index: 100; border-left: 1px solid #222; border-right: 1px solid #222;
-            display: flex; align-items: center; justify-content: center;
-        }
+        .resizer { width: 10px; background: #0a0a10; cursor: col-resize; transition: 0.3s; z-index: 100; border-left: 1px solid #222; border-right: 1px solid #222; display: flex; align-items: center; justify-content: center; }
         .resizer:hover { background: var(--cyan); box-shadow: 0 0 15px var(--cyan); }
 
-        /* DROITE */
         .right-zone { width: 400px; min-width: 250px; max-width: 80vw; display: flex; flex-direction: column; background: var(--panel); overflow: hidden; }
         
-        .inspector { 
-            background: rgba(0,0,0,0.6); border-bottom: 1px solid var(--border); 
-            padding: 15px; min-height: 110px; flex-shrink: 0; display: flex; 
-        }
+        .inspector { background: rgba(0,0,0,0.6); border-bottom: 1px solid var(--border); padding: 15px; min-height: 110px; flex-shrink: 0; display: flex; }
         #i-img { width: 80px; height: 80px; border: 1px solid var(--cyan); margin-right: 15px; }
         
-        .list { 
-            flex: 1; padding: 10px; overflow-y: auto; 
-            scrollbar-width: thin; scrollbar-color: var(--cyan) transparent;
-        }
+        .list { flex: 1; padding: 10px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--cyan) transparent; }
         .list::-webkit-scrollbar { width: 4px; }
         .list::-webkit-scrollbar-thumb { background: var(--cyan); }
 
-        .card { 
-            background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255,255,255,0.05); 
-            padding: 12px; margin-bottom: 8px; cursor: pointer; position: relative; 
-            transition: all 0.2s; font-family: 'Fira Code', monospace;
-        }
+        .card { background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255,255,255,0.05); padding: 12px; margin-bottom: 8px; cursor: pointer; position: relative; transition: all 0.2s; font-family: 'Fira Code', monospace; }
         .card:hover { border-color: var(--cyan); background: rgba(0, 255, 255, 0.05); }
         .card.selected { border-left: 4px solid var(--cyan); background: rgba(0, 255, 255, 0.1); border-color: var(--cyan); }
         
-        .pos-badge { color: var(--magenta); font-size: 10px; background: rgba(255,0,255,0.1); padding: 1px 4px; border-radius: 2px; margin-left: 5px; }
+        .pos-badge { color: var(--magenta); font-size: 10px; background: rgba(255,0,255,0.1); padding: 1px 4px; border-radius: 2px; }
 
         .w-table { width: 100%; border-collapse: collapse; font-family: 'Fira Code', monospace; font-size: 11px; }
         .w-table th { text-align: left; color: var(--magenta); padding: 8px; border-bottom: 1px solid rgba(255,0,255,0.2); }
         .w-table td { padding: 8px; border-bottom: 1px solid rgba(255,255,255,0.05); }
 
-        .timer-badge { color: var(--cyan); font-size: 11px; font-weight: bold; }
-        input { background: #000; border: 1px solid var(--border); color: var(--cyan); padding: 8px; font-family: 'Fira Code'; font-size: 11px; outline: none; }
-        button.action-btn { background: var(--magenta); border: none; color: #000; padding: 8px 15px; font-weight: bold; cursor: pointer; font-family: 'Rajdhani'; }
+        select, input { background: #000; border: 1px solid var(--border); color: var(--cyan); padding: 5px; font-family: 'Fira Code'; font-size: 11px; outline: none; }
+        .action-btn { background: var(--magenta); border: none; color: #000; padding: 8px 15px; font-weight: bold; cursor: pointer; font-family: 'Rajdhani'; }
     </style>
 </head>
 <body>
     <header>
         <div>
-            <span style="font-size: 20px; font-weight: 700; letter-spacing: 5px; color: var(--cyan); text-shadow: 0 0 10px var(--cyan);">NOX_TACTICAL //</span>
-            <span id="region-display" style="font-size: 18px; color: #fff; font-weight: 300; letter-spacing: 2px;">SCANNING...</span>
+            <span style="font-size: 18px; font-weight: 700; letter-spacing: 3px; color: var(--cyan);">NOX_TACTICAL_OS</span>
+            <span id="region-display" style="margin-left:15px; color: #fff; font-weight: 300;">SCANNING...</span>
         </div>
-        <div id="sim-status" style="font-size: 12px; color: var(--magenta); font-family: 'Fira Code';">SYSTEM_ACTIVE</div>
+        <div style="display:flex; align-items:center; gap:20px;">
+            <div>
+                <span style="font-size:10px; color:var(--magenta);">TZ_OFFSET:</span>
+                <select id="tz-selector" onchange="updateTimeDisplay()">
+                    <option value="local">LOCAL_TIME</option>
+                    <option value="pst">SL_TIME (PST)</option>
+                    <option value="utc">UTC_TIME</option>
+                </select>
+            </div>
+            <div id="clock" style="font-family:'Fira Code'; color:var(--cyan); font-weight:bold; min-width:80px;">00:00:00</div>
+        </div>
     </header>
 
     <div class="main-container">
@@ -108,15 +97,15 @@ HTML_CODE = """
             <div class="map-wrapper"><div id="map-bg"></div><canvas id="cv" width="512" height="512"></canvas></div>
             <div class="watchlist-panel">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
-                    <span style="font-size:14px; color:var(--magenta); font-weight:700; letter-spacing:2px;">[ TRACKER_LOGS ]</span>
+                    <span style="font-size:14px; color:var(--magenta); font-weight:700; letter-spacing:2px;">[ CHRONO_LOGS ]</span>
                     <div>
                         <input type="text" id="watch-uuid" placeholder="TARGET_UUID">
-                        <button class="action-btn" onclick="addWatchManual()">ADD_TRACK</button>
+                        <button class="action-btn" onclick="addWatchManual()">ADD</button>
                     </div>
                 </div>
                 <div style="overflow-y:auto; flex:1;" class="list">
                     <table class="w-table">
-                        <thead><tr><th>IDENTIFIANT</th><th>STATUS</th><th>IN</th><th>OUT</th><th>OPT</th></tr></thead>
+                        <thead><tr><th>AGENT</th><th>STATUS</th><th>ARR_ZONE</th><th>DEP_ZONE</th><th>OPT</th></tr></thead>
                         <tbody id="watch-list-body"></tbody>
                     </table>
                 </div>
@@ -130,37 +119,56 @@ HTML_CODE = """
                 <div id="inspect-ui" style="display:none; width:100%;">
                     <img id="i-img" src="">
                     <div style="display:inline-block; vertical-align:top;">
-                        <div id="i-name" style="font-weight:700; color:#fff; font-size:20px; margin-bottom:4px;">---</div>
-                        <div id="i-pos" style="font-size:11px; color:var(--magenta); margin-bottom:4px; font-family:'Fira Code';">POS: --, --</div>
-                        <div id="i-time" style="font-size:11px; color:var(--cyan); margin-bottom:8px; font-family:'Fira Code';">---</div>
-                        <button id="i-btn" style="padding:4px 15px; background:var(--cyan); border:none; cursor:pointer; font-size:10px; font-weight:700; color:#000;">PROFILE</button>
+                        <div id="i-name" style="font-weight:700; color:#fff; font-size:18px; margin-bottom:2px;">---</div>
+                        <div id="i-pos" style="font-size:10px; color:var(--magenta); font-family:'Fira Code';">POS: --, --</div>
+                        <div id="i-time" style="font-size:10px; color:var(--cyan); margin-bottom:8px; font-family:'Fira Code';">ACTIVE: 0m</div>
+                        <button id="i-btn" style="padding:4px 12px; background:var(--cyan); border:none; cursor:pointer; font-size:9px; font-weight:700;">OPEN_SL_PROFILE</button>
                     </div>
                 </div>
-                <div id="inspect-none" style="text-align:center; width:100%; opacity:0.3; font-size:12px; margin-top:35px;">AWAITING_SCAN...</div>
             </div>
             <div class="list" id="feed"></div>
         </div>
     </div>
 
     <script>
+        // --- LOGIQUE HORAIRE ---
+        function getFormattedTime(timestamp = null) {
+            const mode = document.getElementById('tz-selector').value;
+            let date = timestamp ? new Date(timestamp * 1000) : new Date();
+            
+            if (mode === 'utc') {
+                return date.toISOString().substr(11, 8);
+            } else if (mode === 'pst') {
+                // SL Time est PST (UTC-8) ou PDT (UTC-7). On simplifie en UTC-8 pour l'exemple
+                const pstDate = new Date(date.getTime() + (date.getTimezoneOffset() * 60000) - (8 * 3600000));
+                return pstDate.toTimeString().substr(0, 8);
+            }
+            return date.toTimeString().substr(0, 8);
+        }
+
+        function updateClock() {
+            document.getElementById('clock').innerText = getFormattedTime();
+        }
+        setInterval(updateClock, 1000);
+
+        // --- RESIZER ---
         const resizer = document.getElementById('dragMe');
         const rightSide = document.getElementById('rightSide');
         let isResizing = false;
 
-        resizer.addEventListener('mousedown', (e) => { isResizing = true; document.body.style.cursor = 'col-resize'; });
+        resizer.addEventListener('mousedown', () => { isResizing = true; });
         document.addEventListener('mousemove', (e) => {
             if (!isResizing) return;
             const newWidth = window.innerWidth - e.clientX;
-            if (newWidth > 250 && newWidth < (window.innerWidth - 600)) { rightSide.style.width = `${newWidth}px`; }
+            if (newWidth > 200 && newWidth < (window.innerWidth - 600)) { rightSide.style.width = `${newWidth}px`; }
         });
-        document.addEventListener('mouseup', () => { isResizing = false; document.body.style.cursor = 'default'; });
+        document.addEventListener('mouseup', () => { isResizing = false; });
 
+        // --- CORE DATA ---
         const canvas = document.getElementById('cv');
         const ctx = canvas.getContext('2d');
         const colors = ["#00ffff", "#ff00ff", "#00ff9f", "#ffff00"];
-        let selectedKey = null;
-        let lastData = null;
-        let pulseVal = 0;
+        let selectedKey = null, lastData = null, pulseVal = 0;
 
         function formatDuration(start) {
             const diff = Math.floor(Date.now()/1000 - start);
@@ -186,10 +194,8 @@ HTML_CODE = """
 
         function showInspect(av) {
             selectedKey = av.key;
-            document.getElementById('inspect-none').style.display = 'none';
             document.getElementById('inspect-ui').style.display = 'block';
             document.getElementById('i-name').innerText = av.name.toUpperCase();
-            document.getElementById('i-pos').innerText = `COORD: ${Math.round(av.x)}, ${Math.round(av.y)}`;
             document.getElementById('i-img').src = `https://my-secondlife-p01.s3.amazonaws.com/users/${av.key.replace(/-/g, '_')}/thumb_sl_image.png`;
             const n = av.name.toLowerCase().split(' ');
             const p = (n[1] === 'resident') ? n[0] : n.join('.');
@@ -207,8 +213,8 @@ HTML_CODE = """
                         const s = 10 + Math.sin(pulseVal) * 5;
                         ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x,y, s, 0, Math.PI*2); ctx.stroke();
                         ctx.fillStyle = color; ctx.beginPath(); ctx.arc(x,y, 4, 0, Math.PI*2); ctx.fill();
-                        document.getElementById('i-time').innerText = "ONLINE: " + formatDuration(av.start_time);
-                        document.getElementById('i-pos').innerText = `COORD: ${Math.round(av.x)}, ${Math.round(av.y)}`;
+                        document.getElementById('i-time').innerText = "SESSION: " + formatDuration(av.start_time);
+                        document.getElementById('i-pos').innerText = `POS: ${Math.round(av.x)}, ${Math.round(av.y)}`;
                     } else {
                         ctx.globalAlpha = selectedKey ? 0.2 : 0.8;
                         ctx.fillStyle = color; ctx.beginPath(); ctx.arc(x,y, 5, 0, Math.PI*2); ctx.fill();
@@ -240,9 +246,9 @@ HTML_CODE = """
                 card.className = "card" + (selectedKey === av.key ? " selected" : "");
                 card.onclick = (e) => { if(e.target.tagName !== 'BUTTON') showInspect(av); };
                 card.innerHTML = `<b style="color:${colors[i%colors.length]}">> ${av.name}</b> 
-                                  <span class="pos-badge">${Math.round(av.x)},${Math.round(av.y)}</span>
-                                  <br><span class="timer-badge">[${formatDuration(av.start_time)}]</span>
-                                  <button class="quick-add" onclick="addToWatch('${av.key}', '${av.name}')">LOG</button>`;
+                                  <span class="pos-badge">${Math.round(av.x)},${Math.round(av.y)}</span><br>
+                                  <span class="timer-badge">[${formatDuration(av.start_time)}]</span>
+                                  <button class="quick-add" onclick="addToWatch('${av.key}', '${av.name}')" style="position:absolute;right:10px;top:10px;background:none;border:1px solid var(--magenta);color:var(--magenta);font-size:9px;cursor:pointer;">LOG</button>`;
                 feed.appendChild(card);
             });
             feed.scrollTop = scrollPos;
@@ -253,14 +259,21 @@ HTML_CODE = """
                 const info = d.watchlist[uuid];
                 const row = document.createElement('tr');
                 let c = info.online ? "var(--cyan)" : "#444";
-                row.innerHTML = `<td><b style="color:#fff">${info.name || '---'}</b></td>
+                row.innerHTML = `<td><b>${info.name || '---'}</b></td>
                                  <td style="color:${c}; font-weight:bold;">${info.online ? 'ON' : 'OFF'}</td>
-                                 <td>${info.arr || '--:--'}</td>
-                                 <td>${info.dep || '--:--'}</td>
+                                 <td>${info.arr_raw ? convertTimestamp(info.arr_raw) : '--:--'}</td>
+                                 <td>${info.dep_raw ? convertTimestamp(info.dep_raw) : '--:--'}</td>
                                  <td><span style="color:var(--magenta); cursor:pointer;" onclick="removeWatch('${uuid}')">[X]</span></td>`;
                 wBody.appendChild(row);
             });
         }
+
+        function convertTimestamp(ts) {
+            return getFormattedTime(ts);
+        }
+
+        function updateTimeDisplay() { fetchData(); }
+
         setInterval(fetchData, 2000);
         draw();
     </script>
@@ -268,12 +281,10 @@ HTML_CODE = """
 </html>
 """
 
-# ... (Logique API Python reste identique à la V7.8) ...
 @app.route('/api', methods=['GET', 'POST'])
 def handle():
     global db, times, watchlist
     now = time.time()
-    dt_now = datetime.now().strftime("%H:%M:%S")
     if request.method == 'POST':
         try:
             data = request.get_json(silent=True)
@@ -282,8 +293,10 @@ def handle():
             db["coords"] = data.get("grid_coords", {"x":0, "y":0})
             incoming = data.get("avatars", [])
             uids_present = [av.get("key") for av in incoming]
+            
             for uid in list(times.keys()):
                 if uid not in uids_present: del times[uid]
+            
             active_list = []
             for av in incoming:
                 uid = av.get("key")
@@ -293,6 +306,8 @@ def handle():
                     active_list.append(av)
                     if uid in watchlist: watchlist[uid]["name"] = av.get("name", "Unknown")
             db["avatars"] = active_list
+            
+            # Watchlist logic avec stockage de timestamp brut pour conversion JS
             for w_uid in list(watchlist.keys()):
                 try:
                     url = f"http://world.secondlife.com/resident/{w_uid}"
@@ -300,10 +315,11 @@ def handle():
                         content = f.read().decode('utf-8').lower()
                         is_on = "online" in content and "offline" not in content
                         if w_uid in uids_present: is_on = True
+                        
                         if is_on and not watchlist[w_uid]["online"]:
-                            watchlist[w_uid]["arr"] = dt_now
+                            watchlist[w_uid]["arr_raw"] = now
                         elif not is_on and watchlist[w_uid]["online"]:
-                            watchlist[w_uid]["dep"] = dt_now
+                            watchlist[w_uid]["dep_raw"] = now
                         watchlist[w_uid]["online"] = is_on
                 except: pass
             return "OK", 200
@@ -315,7 +331,7 @@ def add_watch():
     data = request.get_json(silent=True)
     uid = data.get("uuid"); name = data.get("name", "")
     if uid and uid not in watchlist:
-        watchlist[uid] = {"name": name, "online": False, "arr": "", "dep": ""}
+        watchlist[uid] = {"name": name, "online": False, "arr_raw": None, "dep_raw": None}
     return "OK"
 
 @app.route('/unwatch', methods=['POST'])
