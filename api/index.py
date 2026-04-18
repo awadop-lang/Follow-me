@@ -2,7 +2,7 @@ from flask import Flask, request, jsonify, render_template_string, session, redi
 from datetime import datetime
 
 app = Flask(__name__)
-app.secret_key = "NOX_ZETA_VISUAL_LOGS_2026"
+app.secret_key = "NOX_ZETA_PROFILES_V7"
 
 # Base de données multi-utilisateurs
 users_db = {
@@ -37,15 +37,17 @@ INTERFACE_HTML = """
         .col-header { padding: 15px; border-bottom: 1px solid var(--border); font-family: 'Orbitron'; font-size: 11px; color: var(--magenta); background: rgba(0,0,0,0.5); text-transform: uppercase; }
         .scroll-area { flex: 1; overflow-y: auto; padding: 12px; scrollbar-width: thin; }
 
-        /* Style des cartes Watchlist */
         .item { background: rgba(255,255,255,0.02); border: 1px solid var(--border); padding: 15px; margin-bottom: 12px; position: relative; }
         .item.watched { border-left: 4px solid var(--red); background: rgba(255, 49, 49, 0.05); }
         
         .name-row { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
         .name { color: var(--cyan); font-weight: 700; font-size: 16px; text-decoration: none; font-family: 'Orbitron'; }
-        .item.watched .name { color: var(--red); text-shadow: 0 0 5px rgba(255, 49, 49, 0.3); }
+        .item.watched .name { color: var(--red); }
 
-        /* Grille des horaires (Le cœur de ta demande) */
+        /* Style du lien de profil */
+        .profile-link { color: #555; text-decoration: none; font-size: 12px; margin-left: 8px; transition: 0.2s; }
+        .profile-link:hover { color: var(--cyan); text-shadow: 0 0 5px var(--cyan); }
+
         .log-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 5px; }
         .time-badge { background: rgba(0,0,0,0.5); padding: 6px; border-radius: 3px; border: 1px solid rgba(255,255,255,0.1); }
         .time-label { font-size: 9px; text-transform: uppercase; color: #888; display: block; margin-bottom: 2px; }
@@ -61,7 +63,6 @@ INTERFACE_HTML = """
         .action-btn { background: transparent; border: 1px solid var(--cyan); color: var(--cyan); font-family: 'Orbitron'; font-size: 14px; width: 30px; height: 30px; cursor: pointer; transition: 0.2s; }
         .action-btn:hover { background: var(--cyan); color: #000; }
 
-        /* Radar */
         .map-wrapper { width: 100%; display: flex; justify-content: center; align-items: center; padding: 20px; box-sizing: border-box; }
         .map-frame { position: relative; width: 512px; height: 512px; border: 1px solid var(--cyan); background: #000; }
         #map-bg { width: 100%; height: 100%; position: absolute; opacity: 0.4; background-size: cover; }
@@ -104,6 +105,10 @@ INTERFACE_HTML = """
             updateUI();
         }
 
+        function getProfileURL(name) {
+            return `https://my.secondlife.com/${name.replace(/ /g, '.')}`;
+        }
+
         async function updateUI() {
             try {
                 const res = await fetch('/api_data');
@@ -118,12 +123,16 @@ INTERFACE_HTML = """
                 document.getElementById('scan-list').innerHTML = data.avatars.map(av => {
                     const isWatched = watchlist.includes(av.name);
                     return `<div class="item ${isWatched ? 'watched' : ''}">
-                        <div class="name-box"><span class="name" style="font-size:14px;">${av.name}</span><div class="details">POS: ${Math.round(av.x)}, ${Math.round(av.y)}</div></div>
+                        <div class="name-box">
+                            <span class="name" style="font-size:14px;">${av.name}</span>
+                            <a href="${getProfileURL(av.name)}" target="_blank" class="profile-link" title="Voir profil">🔗</a>
+                            <div class="details">POS: ${Math.round(av.x)}, ${Math.round(av.y)}</div>
+                        </div>
                         <button class="action-btn" onclick="toggleWatch('${av.name}')">${isWatched ? '-' : '+'}</button>
                     </div>`;
                 }).join('');
 
-                // WATCHLIST AMÉLIORÉE
+                // WATCHLIST
                 document.getElementById('watch-list').innerHTML = watchlist.map(name => {
                     const hist = data.history[name] || {in: "--:--:--", out: "--:--:--", active: false};
                     const isOnline = data.avatars.find(a => a.name === name);
@@ -132,7 +141,8 @@ INTERFACE_HTML = """
                         <div class="name-row">
                             <div>
                                 <span class="status-dot ${isOnline ? 'online' : 'offline'}"></span>
-                                <a href="https://my.secondlife.com/${name.replace(/ /g, '.')}" target="_blank" class="name">${name}</a>
+                                <span class="name">${name}</span>
+                                <a href="${getProfileURL(name)}" target="_blank" class="profile-link" title="Voir profil">🔗</a>
                             </div>
                             <button class="action-btn" onclick="toggleWatch('${name}')" style="color:var(--red); border-color:var(--red); width:24px; height:24px; font-size:10px;">✖</button>
                         </div>
@@ -176,7 +186,7 @@ INTERFACE_HTML = """
 </html>
 """
 
-# --- (Reste des routes / index / login / register identiques au code précédent) ---
+# ... (Routes POST, login, register, etc. restent inchangées par rapport à la version précédente) ...
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
