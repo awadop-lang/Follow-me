@@ -4,18 +4,16 @@ import urllib.request
 
 app = Flask(__name__)
 
-# --- STOCKAGE SESSION ---
 db = {"region": "UPLINK_STABLE", "coords": {"x": 0, "y": 0}, "avatars": []}
-times = {}      # Mémoire temps d'activité local
-watchlist = {}  # Mémoire surveillance globale {uuid: {"online": bool, "start": timestamp}}
+times = {}      
+watchlist = {}  
 
-# --- INTERFACE WEB ---
 HTML_CODE = """
 <!DOCTYPE html>
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <title>NOX_TACTICAL_V6.8</title>
+    <title>NOX_TACTICAL_V6.9</title>
     <style>
         :root { --p: #00ffff; --bg: #010103; --panel: #05050a; --font: 'Fira Code', monospace; }
         body { background: var(--bg); color: #a0c0c0; font-family: var(--font); margin: 0; padding: 15px; height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
@@ -34,6 +32,8 @@ HTML_CODE = """
         input { background: #000; border: 1px solid #333; color: var(--p); padding: 5px; flex: 1; font-family: inherit; font-size: 11px; outline: none; }
         .add-btn { background: #ff00ff; color: #000; border: none; padding: 5px 10px; cursor: pointer; font-weight: bold; }
         .watch-item { font-size: 10px; padding: 6px; border-bottom: 1px solid #111; display: flex; justify-content: space-between; align-items: center; }
+        .del-btn { color: #ff0000; cursor: pointer; font-weight: bold; margin-left: 10px; border: 1px solid #400; padding: 0 4px; border-radius: 2px; }
+        .del-btn:hover { background: #ff0000; color: #fff; }
         .dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; margin-right: 6px; }
         ::-webkit-scrollbar { width: 3px; }
         ::-webkit-scrollbar-thumb { background: var(--p); }
@@ -41,7 +41,7 @@ HTML_CODE = """
 </head>
 <body>
     <header>
-        <div style="font-size: 16px; font-weight: bold; letter-spacing: 4px; color: var(--p);">[ TACTICAL_MONITOR_V6.8 ]</div>
+        <div style="font-size: 16px; font-weight: bold; letter-spacing: 4px; color: var(--p);">[ TACTICAL_MONITOR_V6.9 ]</div>
         <div id="sim-status" style="font-size: 10px; opacity: 0.5;">UPLINK_ACTIVE</div>
     </header>
 
@@ -53,7 +53,7 @@ HTML_CODE = """
                 <img id="i-img" src="" onload="this.style.display='block'">
                 <div id="i-name" style="font-weight:bold; color:#fff; font-size:14px;">---</div>
                 <div id="i-time" style="font-size:11px; color:var(--p); margin: 5px 0;">---</div>
-                <button id="i-btn" style="width:100%; padding:8px; background:var(--p); border:none; cursor:pointer; font-weight:bold; margin-top:5px;">OPEN WEB PROFILE</button>
+                <button id="i-btn" style="width:100%; padding:8px; background:var(--p); border:none; cursor:pointer; font-weight:bold; margin-top:5px;">WEB PROFILE</button>
             </div>
             <div id="inspect-none" style="text-align:center; opacity:0.2; font-size:10px; margin-top:50px;">NO_AGENT_SELECTED</div>
         </div>
@@ -78,6 +78,10 @@ HTML_CODE = """
             if(uuid.length < 30) return;
             await fetch('/watch', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({uuid}) });
             document.getElementById('watch-uuid').value = "";
+        }
+
+        async function removeWatch(uuid) {
+            await fetch('/unwatch', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({uuid}) });
         }
 
         function showInspect(av) {
@@ -118,13 +122,16 @@ HTML_CODE = """
                     const info = d.watchlist[uuid];
                     const item = document.createElement('div');
                     item.className = "watch-item";
-                    let status = "OFFLINE"; let c = "#444";
+                    let status = "OFF"; let c = "#444";
                     if(info.online) { 
                         let diff = Math.floor((Date.now()/1000 - info.start)/60);
-                        status = "ONLINE (" + (info.start > 0 ? diff : "?") + "m)";
+                        status = "ON (" + (info.start > 0 ? diff : "?") + "m)";
                         c = "#00ff00";
                     }
-                    item.innerHTML = `<span><i class="dot" style="background:${c}"></i>${uuid.substring(0,8)}</span><span style="color:${c}">${status}</span>`;
+                    item.innerHTML = `
+                        <span><i class="dot" style="background:${c}"></i>${uuid.substring(0,8)}</span>
+                        <span><b style="color:${c}">${status}</b> <span class="del-btn" onclick="removeWatch('${uuid}')">X</span></span>
+                    `;
                     wList.appendChild(item);
                 });
             } catch(e){}
@@ -135,7 +142,6 @@ HTML_CODE = """
 </html>
 """
 
-# --- LOGIQUE SERVEUR ---
 @app.route('/api', methods=['GET', 'POST'])
 def handle():
     global db, times, watchlist
@@ -144,18 +150,15 @@ def handle():
         try:
             data = request.get_json(silent=True)
             if not data: return "OK", 200
-            
             db["region"] = data.get("region", "UNK")
             db["coords"] = data.get("grid_coords", {"x":0, "y":0})
             incoming = data.get("avatars", [])
-            active_list = []
             uids_present = [av.get("key") for av in incoming]
             
-            # Nettoyage des chronos locaux (si l'agent n'est plus là)
             for uid in list(times.keys()):
                 if uid not in uids_present: del times[uid]
 
-            # Enregistrement des nouveaux agents
+            active_list = []
             for av in incoming:
                 uid = av.get("key")
                 if uid:
@@ -164,28 +167,19 @@ def handle():
                     active_list.append(av)
             db["avatars"] = active_list
 
-            # --- DÉTECTION WATCHLIST (V6.8 ENHANCED) ---
             for w_uid in list(watchlist.keys()):
                 try:
-                    # A. Vérification Web SL
                     url = f"http://world.secondlife.com/resident/{w_uid}"
                     with urllib.request.urlopen(url, timeout=1) as f:
                         content = f.read().decode('utf-8').lower()
                         is_on = "online" in content and "offline" not in content
-                        
-                        # B. Priorité Radar : Si l'agent est sur ta sim, il est forcément ONLINE
                         if w_uid in uids_present: is_on = True
-
-                        # Démarrage du chrono global si transition
                         if is_on and not watchlist[w_uid]["online"]:
                             watchlist[w_uid]["start"] = now
-                        
                         watchlist[w_uid]["online"] = is_on
                 except: pass
-                
             return "OK", 200
         except: return "ERR", 500
-        
     return jsonify({**db, "watchlist": watchlist})
 
 @app.route('/watch', methods=['POST'])
@@ -194,6 +188,14 @@ def add_watch():
     uid = data.get("uuid")
     if uid and uid not in watchlist:
         watchlist[uid] = {"online": False, "start": 0}
+    return "OK"
+
+@app.route('/unwatch', methods=['POST'])
+def unwatch():
+    data = request.get_json(silent=True)
+    uid = data.get("uuid")
+    if uid in watchlist:
+        del watchlist[uid]
     return "OK"
 
 @app.route('/')
