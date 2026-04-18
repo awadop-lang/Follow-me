@@ -11,13 +11,13 @@ db = {
 }
 times = {}
 
-# --- INTERFACE TACTIQUE NOX V5.3 (FINAL) ---
+# --- INTERFACE TACTIQUE NOX V6.0 (INTEGRATED INSPECTOR) ---
 HTML_CODE = """
 <!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>TACTICAL_HUD // NOX_V5.3</title>
+    <title>TACTICAL_HUD // NOX_V6.0</title>
     <style>
         :root { 
             --p: #00ffff; 
@@ -38,7 +38,8 @@ HTML_CODE = """
             display: flex; justify-content: space-between; align-items: center; 
         }
 
-        .grid { display: grid; grid-template-columns: 512px 1fr; gap: 20px; flex: 1; overflow: hidden; }
+        /* Grille : Carte (512px) | Liste (Flexible) | Inspecteur (300px) */
+        .grid { display: grid; grid-template-columns: 512px 1fr 300px; gap: 15px; flex: 1; overflow: hidden; }
 
         /* --- BLOC CARTE --- */
         .map-wrapper { 
@@ -70,29 +71,52 @@ HTML_CODE = """
         .card { 
             background: rgba(255,255,255,0.01); border: 1px solid #1a1a1a; 
             padding: 12px; margin-bottom: 10px; border-radius: 2px; 
-            cursor: pointer; transition: all 0.2s ease; position: relative;
+            cursor: pointer; transition: all 0.2s ease;
         }
         .card:hover { 
             background: rgba(0,255,255,0.08); border-color: var(--p); 
-            transform: translateX(8px); box-shadow: -5px 0 15px rgba(0,255,255,0.15);
+            transform: translateX(5px);
         }
-        .card:active { transform: scale(0.98); }
         
-        .card-header { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 5px; }
+        .card-header { display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 5px; }
         .bar-bg { width: 100%; height: 2px; background: #111; margin-top: 8px; }
-        .bar-fill { height: 100%; transition: width 1s; box-shadow: 0 0 8px currentColor; }
-        .card-footer { font-size: 9px; margin-top: 6px; opacity: 0.4; letter-spacing: 1px; }
+        .bar-fill { height: 100%; transition: width 1s; }
 
-        /* Scrollbar Cyber */
-        .list::-webkit-scrollbar { width: 4px; }
-        .list::-webkit-scrollbar-track { background: #000; }
-        .list::-webkit-scrollbar-thumb { background: var(--p); }
+        /* --- BLOC INSPECTEUR --- */
+        .inspector { 
+            background: #000; border: 1px solid #222; display: flex; flex-direction: column; 
+            border-top: 2px solid var(--p); box-shadow: inset 0 0 20px rgba(0,255,255,0.05);
+        }
+        .inspect-header { padding: 10px; font-size: 10px; color: var(--p); background: rgba(0,255,255,0.05); text-align: center; letter-spacing: 2px; }
+        
+        .inspect-photo-frame { 
+            width: 100%; aspect-ratio: 1; background: #0a0a0a; border-bottom: 1px solid #222;
+            display: flex; align-items: center; justify-content: center; overflow: hidden; position: relative;
+        }
+        #i-img { width: 100%; height: 100%; object-fit: cover; display: none; z-index: 2; }
+        .no-photo { font-size: 10px; opacity: 0.2; text-align: center; z-index: 1; }
+
+        .inspect-content { padding: 15px; flex: 1; overflow-y: auto; }
+        .i-label { font-size: 9px; color: var(--p); opacity: 0.6; margin-top: 12px; text-transform: uppercase; }
+        .i-val { font-size: 13px; color: #fff; font-weight: bold; margin-bottom: 4px; word-break: break-all; }
+
+        .btn-profile { 
+            width: 100%; padding: 12px; background: var(--p); color: #000; 
+            border: none; font-family: inherit; font-weight: bold; cursor: pointer;
+            margin-top: 20px; text-transform: uppercase; display: none;
+        }
+        .btn-profile:hover { background: #fff; }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: #000; }
+        ::-webkit-scrollbar-thumb { background: var(--p); }
     </style>
 </head>
 <body>
     <header>
-        <div style="font-size: 16px; font-weight: bold; letter-spacing: 4px; color: var(--p);">[ TACTICAL_MONITOR_V5.3 ]</div>
-        <div id="status" style="font-size: 10px; opacity: 0.6;">MODE: INTERACTIVE_PROFILING // ENCRYPTED</div>
+        <div style="font-size: 16px; font-weight: bold; letter-spacing: 4px; color: var(--p);">[ TACTICAL_MONITOR_V6.0 ]</div>
+        <div id="status" style="font-size: 10px; opacity: 0.6;">SIGNAL: STABLE // SCANNER_ACTIVE</div>
     </header>
 
     <div class="grid">
@@ -101,22 +125,68 @@ HTML_CODE = """
             <div class="scan-line"></div>
             <canvas id="cv" width="512" height="512"></canvas>
         </div>
-        <div class="list" id="feed">
+
+        <div class="list" id="feed"></div>
+
+        <div class="inspector">
+            <div class="inspect-header">// AGENT_DOSSIER</div>
+            <div class="inspect-photo-frame">
+                <img id="i-img" src="" onerror="this.style.display='none'">
+                <div class="no-photo">AWAITING_SCAN...</div>
             </div>
+            <div class="inspect-content">
+                <div class="i-label">Identity</div>
+                <div id="i-name" class="i-val">NOT_SELECTED</div>
+                
+                <div class="i-label">Duration</div>
+                <div id="i-time" class="i-val" style="color:var(--p)">00m 00s</div>
+
+                <div class="i-label">Position</div>
+                <div id="i-pos" class="i-val">---</div>
+
+                <div class="i-label">Global UID</div>
+                <div id="i-key" class="i-val" style="font-size:10px; color:#444;">---</div>
+
+                <button id="i-btn" class="btn-profile">Open Web Profile</button>
+            </div>
+        </div>
     </div>
 
     <script>
         const canvas = document.getElementById('cv');
         const ctx = canvas.getContext('2d');
-        const colors = ["#00ffff", "#ff00ff", "#00ff9f", "#ffff00", "#ff3f00", "#007fff", "#ff0066"];
+        const colors = ["#00ffff", "#ff00ff", "#00ff9f", "#ffff00", "#ff3f00", "#007fff"];
         let trails = {}; 
+        let selectedKey = null;
+
+        function fmtTime(s) {
+            const m = Math.floor(s/60);
+            return `${m}m ${Math.floor(s%60)}s`;
+        }
+
+        function inspectAgent(av) {
+            selectedKey = av.key;
+            const img = document.getElementById('i-img');
+            const btn = document.getElementById('i-btn');
+            
+            // Photo Fix
+            img.style.display = 'none';
+            img.src = `https://my-secondlife-p01.s3.amazonaws.com/users/${av.key.replace(/-/g, '_')}/thumb_sl_image.png`;
+            img.onload = () => img.style.display = 'block';
+
+            document.getElementById('i-name').innerText = av.name.toUpperCase();
+            document.getElementById('i-key').innerText = av.key;
+            
+            btn.style.display = 'block';
+            const urlName = av.name.toLowerCase().replace(/ /g, '.');
+            btn.onclick = () => window.open(`https://my.secondlife.com/${urlName}`, '_blank');
+        }
 
         async function update() {
             try {
                 const r = await fetch('/api');
                 const d = await r.json();
                 
-                // Update Map
                 document.getElementById('map-bg').style.backgroundImage = `url('https://map.secondlife.com/map-1-${d.coords.x}-${d.coords.y}-objects.jpg')`;
                 
                 ctx.clearRect(0,0,512,512);
@@ -130,50 +200,39 @@ HTML_CODE = """
                 d.avatars.forEach((av, i) => {
                     const color = colors[i % colors.length];
                     const x = av.x * 2; const y = 512 - (av.y * 2);
+                    const timeS = Math.floor(Date.now()/1000 - av.start_time);
 
-                    // --- Logique Trails Persistants ---
-                    if(!trails[av.key]) trails[av.key] = [];
-                    let lastP = trails[av.key][trails[av.key].length - 1];
-                    if(!lastP || Math.abs(lastP.x - x) > 1 || Math.abs(lastP.y - y) > 1) {
-                        trails[av.key].push({x, y});
+                    // Update Inspector in real-time
+                    if(selectedKey === av.key) {
+                        document.getElementById('i-time').innerText = fmtTime(timeS);
+                        document.getElementById('i-pos').innerText = `${Math.floor(av.x)}, ${Math.floor(av.y)}`;
                     }
-                    if(trails[av.key].length > 600) trails[av.key].shift();
 
-                    // Dessin Trajectoire
+                    // Trails
+                    if(!trails[av.key]) trails[av.key] = [];
+                    let lp = trails[av.key][trails[av.key].length - 1];
+                    if(!lp || Math.abs(lp.x - x) > 1 || Math.abs(lp.y - y) > 1) trails[av.key].push({x, y});
+                    if(trails[av.key].length > 400) trails[av.key].shift();
+
                     ctx.beginPath(); ctx.strokeStyle = color; ctx.globalAlpha = 0.4; ctx.lineWidth = 1;
                     trails[av.key].forEach((p, idx) => { if(idx==0) ctx.moveTo(p.x,p.y); else ctx.lineTo(p.x,p.y); });
                     ctx.stroke(); ctx.globalAlpha = 1.0;
 
-                    // Dessin Target Précision
-                    ctx.strokeStyle = color; ctx.lineWidth = 1; 
-                    ctx.beginPath(); ctx.arc(x,y,6,0,7); ctx.stroke(); 
+                    // Dot
+                    ctx.strokeStyle = color; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(x,y,6,0,7); ctx.stroke(); 
                     ctx.fillStyle = "white"; ctx.beginPath(); ctx.arc(x,y,1.5,0,7); ctx.fill(); 
-                    
-                    ctx.fillStyle = "white"; ctx.font = "bold 10px monospace"; 
-                    ctx.shadowColor = "black"; ctx.shadowBlur = 3;
-                    ctx.fillText(av.name.toUpperCase(), x+10, y+4);
-                    ctx.shadowBlur = 0;
 
-                    // Création de la Carte Interactive
-                    const timeS = Math.floor(Date.now()/1000 - av.start_time);
+                    // List Card
                     const pct = Math.min(100, (timeS / 3600) * 100);
                     const card = document.createElement('div');
                     card.className = "card";
-                    
-                    // Action au clic : Profil SL
-                    card.onclick = () => {
-                        window.open(`secondlife:///app/agent/${av.key}/about`, '_self');
-                    };
-
+                    card.onclick = () => inspectAgent(av);
                     card.innerHTML = `
                         <div class="card-header">
                             <b style="color:${color}">${av.name}</b>
                             <span style="opacity:0.7">${Math.floor(av.x)}, ${Math.floor(av.y)}</span>
                         </div>
-                        <div class="bar-bg"><div class="bar-fill" style="width:${pct}%; background:${color}; color:${color}"></div></div>
-                        <div class="card-footer">
-                            U_TIME: ${Math.floor(timeS/60)}M ${timeS%60}S | ID: ${av.key.substring(0,8)}...
-                        </div>
+                        <div class="bar-bg"><div class="bar-fill" style="width:${pct}%; background:${color}; box-shadow:0 0 5px ${color}"></div></div>
                     `;
                     feed.appendChild(card);
                 });
