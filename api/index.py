@@ -2,20 +2,19 @@ from flask import Flask, request, jsonify, render_template_string, session, redi
 import time
 
 app = Flask(__name__)
-app.secret_key = "NOX_ZETA_ULTRA_165"
+app.secret_key = "NOX_ZETA_FINAL_V166"
 
-# Simulation de base de données (Persistante tant que le conteneur Vercel est chaud)
+# Base de données en mémoire vive
 db = {
     "admin": {
         "pw": "1234",
         "region": "Initialisation...",
         "coords": {"x": 0, "y": 0},
-        "avatars": [],    # Radar local
-        "watchlist": []   # Persistant: [{"name":str, "uuid":str, "online_sl":bool, "last_ping":float}]
+        "avatars": [],
+        "watchlist": [] # Format: {"name":str, "uuid":str, "online_sl":bool, "last_ping":float}
     }
 }
 
-# --- INTERFACE TACTIQUE (HTML Intégré) ---
 INTERFACE_HTML = """
 <!DOCTYPE html>
 <html>
@@ -35,7 +34,7 @@ INTERFACE_HTML = """
         .status-badge { font-size: 9px; padding: 2px 5px; border-radius: 3px; font-weight: bold; margin-top: 5px; display: inline-block; border: 1px solid; }
         .st-local { color: var(--green); border-color: var(--green); background: rgba(0,255,170,0.1); }
         .st-grid { color: #f1c40f; border-color: #f1c40f; background: rgba(241,196,15,0.1); }
-        .st-off { color: #555; border-color: #444; }
+        .st-off { color: #555; border-color: #444; background: rgba(255,255,255,0.02); }
         .action-btn { background: transparent; border: 1px solid var(--cyan); color: var(--cyan); cursor: pointer; float: right; padding: 2px 6px; }
         .map-frame { width: 512px; height: 512px; position: relative; border: 1px solid var(--cyan); background: #000; margin: auto; }
         #map-bg { width: 100%; height: 100%; position: absolute; opacity: 0.5; background-size: cover; }
@@ -44,8 +43,8 @@ INTERFACE_HTML = """
 </head>
 <body onload="setInterval(updateUI, 2000)">
     <header>
-        <div style="font-family:'Orbitron'; color:var(--cyan)">NOX//ZETA v1.6.5</div>
-        <div id="tz-display" style="font-size:12px; color:var(--green)">REGION: <span id="reg-name">---</span></div>
+        <div style="font-family:'Orbitron'; color:var(--cyan)">NOX//ZETA v1.6.6</div>
+        <div style="font-size:12px; color:var(--green)">REGION: <span id="reg-name">---</span></div>
         <a href="/logout" style="color:var(--red); text-decoration:none; font-size:11px;">[ LOGOUT ]</a>
     </header>
 
@@ -58,7 +57,7 @@ INTERFACE_HTML = """
             <div id="scan-list" class="scroll-area"></div>
         </div>
         <div class="column" style="width: 28%;">
-            <div class="col-header" style="color:var(--red)">Watchlist Tracker (Persistant)</div>
+            <div class="col-header" style="color:var(--red)">Watchlist Tracker</div>
             <div id="watch-list" class="scroll-area"></div>
         </div>
     </div>
@@ -82,11 +81,12 @@ INTERFACE_HTML = """
                         <span class="name">${av.name}</span>
                     </div>`).join('');
 
-                // Watchlist
+                // Watchlist Tracker avec Heartbeat Check
                 document.getElementById('watch-list').innerHTML = data.watchlist.map(w => {
                     const isLocal = data.avatars.find(a => a.uuid === w.uuid);
                     const now = Math.floor(Date.now() / 1000);
-                    const isOnlineSL = w.online_sl && (now - w.last_ping < 150);
+                    // Heartbeat : Online seulement si ping < 45 secondes
+                    const isOnlineSL = w.online_sl && (now - w.last_ping < 45);
                     
                     let stC = "st-off", stT = "OFFLINE";
                     if (isLocal) { stC = "st-local"; stT = "SUR RADAR"; }
@@ -99,7 +99,6 @@ INTERFACE_HTML = """
                     </div>`;
                 }).join('');
 
-                // Radar
                 const ctx = document.getElementById('radar-canvas').getContext('2d');
                 ctx.clearRect(0, 0, 512, 512);
                 data.avatars.forEach(av => {
@@ -121,8 +120,6 @@ INTERFACE_HTML = """
 </body>
 </html>
 """
-
-# --- ROUTES FLASK ---
 
 @app.route('/')
 def index():
@@ -150,7 +147,7 @@ def update_global():
         for agent in db[u]['watchlist']:
             if agent.get('uuid') == uuid:
                 agent['online_sl'] = status
-                agent['last_ping'] = time.time()
+                agent['last_ping'] = time.time() # Mise à jour du timestamp
     return "OK", 200
 
 @app.route('/get_watchlist_uuids')
@@ -178,7 +175,7 @@ def login():
     if request.method == 'POST':
         u = request.form.get('u', '').lower()
         if u in db: session['user'] = u; return redirect(url_for('index'))
-    return '<body style="background:#000;color:#0ff;display:flex;justify-content:center;align-items:center;height:100vh;font-family:sans-serif;"><form method="POST" style="border:1px solid #0ff;padding:20px;"><h2>NOX LOGIN</h2><input name="u" placeholder="User"><button>ENTER</button></form></body>'
+    return '<body style="background:#000;color:#0ff;display:flex;justify-content:center;align-items:center;height:100vh;"><form method="POST" style="border:1px solid #0ff;padding:20px;"><h2>NOX LOGIN</h2><input name="u" placeholder="User"><button>ENTER</button></form></body>'
 
 @app.route('/logout')
 def logout(): session.clear(); return redirect(url_for('login'))
