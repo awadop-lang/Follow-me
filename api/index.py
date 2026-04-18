@@ -15,80 +15,98 @@ HTML_CODE = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NOX_TACTICAL_V8.0</title>
-    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@300;500&family=Rajdhani:wght@300;500;700&display=swap" rel="stylesheet">
+    <title>NOX_SHADOW_V8.1</title>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@300;400&family=Orbitron:wght@400;700&family=Rajdhani:wght@300;400;600&display=swap" rel="stylesheet">
     <style>
         :root { 
-            --cyan: #00ffff; --magenta: #ff00ff; --bg: #050508; 
-            --panel: rgba(10, 12, 18, 0.95); --border: rgba(0, 255, 255, 0.2);
+            --cyan: #00ffff; --magenta: #ff00ff; --bg: #020205; 
+            --panel: rgba(5, 7, 12, 0.98); --border: rgba(0, 255, 255, 0.15);
+            --glow: 0 0 8px rgba(0, 255, 255, 0.3);
         }
 
         * { box-sizing: border-box; }
         body { 
-            background: var(--bg); color: #c0d0d0; font-family: 'Rajdhani', sans-serif; 
-            margin: 0; padding: 15px; height: 100vh; overflow: hidden; display: flex; flex-direction: column;
-            background-image: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
-            background-size: 100% 2px, 3px 100%;
+            background: var(--bg); color: #a5b5b5; 
+            font-family: 'Rajdhani', sans-serif; 
+            margin: 0; padding: 12px; height: 100vh; overflow: hidden; display: flex; flex-direction: column;
+            background-image: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.1) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03));
+            background-size: 100% 3px, 3px 100%;
         }
 
         header { 
             border: 1px solid var(--border); background: var(--panel); 
-            padding: 10px 20px; margin-bottom: 10px; 
+            padding: 8px 20px; margin-bottom: 8px; 
             display: flex; justify-content: space-between; align-items: center;
-            box-shadow: 0 0 15px rgba(0, 255, 255, 0.1); flex-shrink: 0;
+            border-left: 4px solid var(--cyan); flex-shrink: 0;
         }
 
-        .main-container { display: flex; flex: 1; overflow: hidden; border: 1px solid var(--border); }
+        .main-container { display: flex; flex: 1; overflow: hidden; border: 1px solid var(--border); background: rgba(0,0,0,0.2); }
 
-        .left-zone { display: flex; flex-direction: column; flex: 1; min-width: 532px; overflow: hidden; background: rgba(0,0,0,0.4); }
-        .map-wrapper { width: 512px; height: 512px; margin: 10px; background: #000; position: relative; flex-shrink: 0; border: 1px solid #222; }
-        #map-bg { width: 100%; height: 100%; background-size: cover; position: absolute; opacity: 0.5; filter: contrast(1.2) brightness(0.6) grayscale(0.5); }
-        canvas { position: absolute; top:0; left:0; z-index: 10; cursor: crosshair; }
+        /* GAUCHE */
+        .left-zone { display: flex; flex-direction: column; flex: 1; min-width: 532px; overflow: hidden; }
+        .map-wrapper { width: 512px; height: 512px; margin: 10px; background: #000; position: relative; flex-shrink: 0; border: 1px solid #1a1a1a; }
+        #map-bg { width: 100%; height: 100%; background-size: cover; position: absolute; opacity: 0.4; filter: brightness(0.5) saturate(0.8); }
+        canvas { position: absolute; top:0; left:0; z-index: 10; }
 
-        .watchlist-panel { flex: 1; background: var(--panel); border-top: 2px solid var(--magenta); padding: 15px; display: flex; flex-direction: column; overflow: hidden; }
+        .watchlist-panel { flex: 1; background: var(--panel); border-top: 1px solid var(--border); padding: 12px; display: flex; flex-direction: column; overflow: hidden; }
 
-        .resizer { width: 10px; background: #0a0a10; cursor: col-resize; transition: 0.3s; z-index: 100; border-left: 1px solid #222; border-right: 1px solid #222; display: flex; align-items: center; justify-content: center; }
-        .resizer:hover { background: var(--cyan); box-shadow: 0 0 15px var(--cyan); }
+        /* RESIZER */
+        .resizer { width: 6px; background: #08080c; cursor: col-resize; transition: 0.2s; z-index: 100; border-left: 1px solid #111; border-right: 1px solid #111; }
+        .resizer:hover { background: var(--cyan); box-shadow: var(--glow); }
 
-        .right-zone { width: 400px; min-width: 250px; max-width: 80vw; display: flex; flex-direction: column; background: var(--panel); overflow: hidden; }
+        /* DROITE */
+        .right-zone { width: 380px; min-width: 250px; max-width: 85vw; display: flex; flex-direction: column; background: var(--panel); border-left: 1px solid var(--border); }
         
-        .inspector { background: rgba(0,0,0,0.6); border-bottom: 1px solid var(--border); padding: 15px; min-height: 110px; flex-shrink: 0; display: flex; }
-        #i-img { width: 80px; height: 80px; border: 1px solid var(--cyan); margin-right: 15px; }
+        .inspector { background: rgba(0,0,0,0.4); border-bottom: 1px solid var(--border); padding: 12px; min-height: 100px; flex-shrink: 0; display: flex; align-items: center; }
+        #i-img { width: 70px; height: 70px; border: 1px solid var(--border); margin-right: 15px; filter: grayscale(0.2); transition: 0.3s; }
+        #i-img:hover { filter: grayscale(0); border-color: var(--cyan); }
         
-        .list { flex: 1; padding: 10px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--cyan) transparent; }
-        .list::-webkit-scrollbar { width: 4px; }
+        .list { flex: 1; padding: 10px; overflow-y: auto; scrollbar-width: none; }
+        .list::-webkit-scrollbar { width: 2px; }
         .list::-webkit-scrollbar-thumb { background: var(--cyan); }
 
-        .card { background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255,255,255,0.05); padding: 12px; margin-bottom: 8px; cursor: pointer; position: relative; transition: all 0.2s; font-family: 'Fira Code', monospace; }
-        .card:hover { border-color: var(--cyan); background: rgba(0, 255, 255, 0.05); }
-        .card.selected { border-left: 4px solid var(--cyan); background: rgba(0, 255, 255, 0.1); border-color: var(--cyan); }
+        /* CARDS */
+        .card { 
+            background: rgba(255, 255, 255, 0.01); border: 1px solid rgba(255,255,255,0.03); 
+            padding: 10px; margin-bottom: 6px; cursor: pointer; position: relative; 
+            transition: 0.1s; font-family: 'Fira Code', monospace; font-weight: 300; font-size: 12px;
+        }
+        .card:hover { background: rgba(0, 255, 255, 0.03); border-color: var(--cyan); }
+        .card.selected { border-left: 2px solid var(--cyan); background: rgba(0, 255, 255, 0.06); color: #fff; }
         
-        .pos-badge { color: var(--magenta); font-size: 10px; background: rgba(255,0,255,0.1); padding: 1px 4px; border-radius: 2px; }
+        .pos-badge { font-family: 'Orbitron', sans-serif; color: var(--magenta); font-size: 9px; letter-spacing: 1px; opacity: 0.8; }
+        .name-tag { font-family: 'Orbitron', sans-serif; font-size: 13px; letter-spacing: 1px; display: block; margin-bottom: 2px; }
 
-        .w-table { width: 100%; border-collapse: collapse; font-family: 'Fira Code', monospace; font-size: 11px; }
-        .w-table th { text-align: left; color: var(--magenta); padding: 8px; border-bottom: 1px solid rgba(255,0,255,0.2); }
-        .w-table td { padding: 8px; border-bottom: 1px solid rgba(255,255,255,0.05); }
+        /* TABLEAU */
+        .w-table { width: 100%; border-collapse: collapse; font-family: 'Fira Code', monospace; font-size: 10px; }
+        .w-table th { text-align: left; color: var(--magenta); padding: 6px; font-family: 'Orbitron'; font-size: 9px; letter-spacing: 1px; border-bottom: 1px solid rgba(255,0,255,0.1); }
+        .w-table td { padding: 6px; border-bottom: 1px solid rgba(255,255,255,0.02); }
 
-        select, input { background: #000; border: 1px solid var(--border); color: var(--cyan); padding: 5px; font-family: 'Fira Code'; font-size: 11px; outline: none; }
-        .action-btn { background: var(--magenta); border: none; color: #000; padding: 8px 15px; font-weight: bold; cursor: pointer; font-family: 'Rajdhani'; }
+        select, input { background: transparent; border: 1px solid var(--border); color: var(--cyan); padding: 4px 8px; font-family: 'Fira Code'; font-size: 11px; outline: none; }
+        select:hover, input:focus { border-color: var(--cyan); }
+        
+        .action-btn { background: transparent; border: 1px solid var(--magenta); color: var(--magenta); padding: 6px 12px; font-family: 'Orbitron'; font-size: 10px; cursor: pointer; transition: 0.2s; }
+        .action-btn:hover { background: var(--magenta); color: #000; box-shadow: 0 0 10px var(--magenta); }
+
+        #clock { font-family: 'Orbitron', sans-serif; color: var(--cyan); font-size: 14px; letter-spacing: 2px; text-shadow: var(--glow); }
     </style>
 </head>
 <body>
     <header>
         <div>
-            <span style="font-size: 18px; font-weight: 700; letter-spacing: 3px; color: var(--cyan);">NOX_TACTICAL_OS</span>
-            <span id="region-display" style="margin-left:15px; color: #fff; font-weight: 300;">SCANNING...</span>
+            <span style="font-family: 'Orbitron'; font-size: 16px; font-weight: 700; letter-spacing: 4px; color: var(--cyan);">NOX//CORE</span>
+            <span id="region-display" style="margin-left:20px; font-family: 'Rajdhani'; font-weight: 300; letter-spacing: 3px; color: #666;">INITIALIZING...</span>
         </div>
-        <div style="display:flex; align-items:center; gap:20px;">
-            <div>
-                <span style="font-size:10px; color:var(--magenta);">TZ_OFFSET:</span>
+        <div style="display:flex; align-items:center; gap:25px;">
+            <div style="display:flex; align-items:center; gap:8px;">
+                <span style="font-size:9px; font-family:'Orbitron'; color:var(--magenta);">ZONE:</span>
                 <select id="tz-selector" onchange="updateTimeDisplay()">
-                    <option value="local">LOCAL_TIME</option>
-                    <option value="pst">SL_TIME (PST)</option>
-                    <option value="utc">UTC_TIME</option>
+                    <option value="local">LOCAL</option>
+                    <option value="pst">SL_PST</option>
+                    <option value="utc">UTC</option>
                 </select>
             </div>
-            <div id="clock" style="font-family:'Fira Code'; color:var(--cyan); font-weight:bold; min-width:80px;">00:00:00</div>
+            <div id="clock">00:00:00</div>
         </div>
     </header>
 
@@ -96,16 +114,16 @@ HTML_CODE = """
         <div class="left-zone">
             <div class="map-wrapper"><div id="map-bg"></div><canvas id="cv" width="512" height="512"></canvas></div>
             <div class="watchlist-panel">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
-                    <span style="font-size:14px; color:var(--magenta); font-weight:700; letter-spacing:2px;">[ CHRONO_LOGS ]</span>
-                    <div>
-                        <input type="text" id="watch-uuid" placeholder="TARGET_UUID">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                    <span style="font-family:'Orbitron'; font-size:11px; color:var(--magenta); letter-spacing:2px;">[ TARGET_PERSISTENCE ]</span>
+                    <div style="display:flex; gap:5px;">
+                        <input type="text" id="watch-uuid" placeholder="UID_SCANNER" style="width:180px;">
                         <button class="action-btn" onclick="addWatchManual()">ADD</button>
                     </div>
                 </div>
                 <div style="overflow-y:auto; flex:1;" class="list">
                     <table class="w-table">
-                        <thead><tr><th>AGENT</th><th>STATUS</th><th>ARR_ZONE</th><th>DEP_ZONE</th><th>OPT</th></tr></thead>
+                        <thead><tr><th>IDENTIFIER</th><th>STATUS</th><th>ARRIVAL</th><th>DEPARTURE</th><th>X</th></tr></thead>
                         <tbody id="watch-list-body"></tbody>
                     </table>
                 </div>
@@ -119,52 +137,47 @@ HTML_CODE = """
                 <div id="inspect-ui" style="display:none; width:100%;">
                     <img id="i-img" src="">
                     <div style="display:inline-block; vertical-align:top;">
-                        <div id="i-name" style="font-weight:700; color:#fff; font-size:18px; margin-bottom:2px;">---</div>
-                        <div id="i-pos" style="font-size:10px; color:var(--magenta); font-family:'Fira Code';">POS: --, --</div>
-                        <div id="i-time" style="font-size:10px; color:var(--cyan); margin-bottom:8px; font-family:'Fira Code';">ACTIVE: 0m</div>
-                        <button id="i-btn" style="padding:4px 12px; background:var(--cyan); border:none; cursor:pointer; font-size:9px; font-weight:700;">OPEN_SL_PROFILE</button>
+                        <div id="i-name" style="font-family:'Orbitron'; font-weight:700; color:#fff; font-size:16px; letter-spacing:1px;">---</div>
+                        <div id="i-pos" style="font-size:10px; color:var(--magenta); font-family:'Fira Code'; margin: 4px 0;">XY: 0.0 / 0.0</div>
+                        <div id="i-time" style="font-size:10px; color:var(--cyan); font-family:'Fira Code'; margin-bottom:8px;">ACTIVE_SEC: 0</div>
+                        <button id="i-btn" style="padding:4px 10px; background:var(--cyan); border:none; cursor:pointer; font-size:9px; font-family:'Orbitron'; font-weight:700; color:#000;">PROFILE_SL</button>
                     </div>
                 </div>
+                <div id="inspect-none" style="text-align:center; width:100%; opacity:0.2; font-family:'Orbitron'; font-size:10px; letter-spacing:2px;">NO_DATA_LINK</div>
             </div>
             <div class="list" id="feed"></div>
         </div>
     </div>
 
     <script>
-        // --- LOGIQUE HORAIRE ---
+        // --- LOGIQUE TEMPS ---
         function getFormattedTime(timestamp = null) {
             const mode = document.getElementById('tz-selector').value;
             let date = timestamp ? new Date(timestamp * 1000) : new Date();
-            
-            if (mode === 'utc') {
-                return date.toISOString().substr(11, 8);
-            } else if (mode === 'pst') {
-                // SL Time est PST (UTC-8) ou PDT (UTC-7). On simplifie en UTC-8 pour l'exemple
-                const pstDate = new Date(date.getTime() + (date.getTimezoneOffset() * 60000) - (8 * 3600000));
-                return pstDate.toTimeString().substr(0, 8);
+            if (mode === 'utc') return date.toISOString().substr(11, 8);
+            if (mode === 'pst') {
+                const pst = new Date(date.getTime() + (date.getTimezoneOffset() * 60000) - (8 * 3600000));
+                return pst.toTimeString().substr(0, 8);
             }
             return date.toTimeString().substr(0, 8);
         }
 
-        function updateClock() {
-            document.getElementById('clock').innerText = getFormattedTime();
-        }
+        function updateClock() { document.getElementById('clock').innerText = getFormattedTime(); }
         setInterval(updateClock, 1000);
 
         // --- RESIZER ---
         const resizer = document.getElementById('dragMe');
         const rightSide = document.getElementById('rightSide');
         let isResizing = false;
-
-        resizer.addEventListener('mousedown', () => { isResizing = true; });
+        resizer.addEventListener('mousedown', () => { isResizing = true; document.body.style.cursor = 'col-resize'; });
         document.addEventListener('mousemove', (e) => {
             if (!isResizing) return;
             const newWidth = window.innerWidth - e.clientX;
             if (newWidth > 200 && newWidth < (window.innerWidth - 600)) { rightSide.style.width = `${newWidth}px`; }
         });
-        document.addEventListener('mouseup', () => { isResizing = false; });
+        document.addEventListener('mouseup', () => { isResizing = false; document.body.style.cursor = 'default'; });
 
-        // --- CORE DATA ---
+        // --- DATA ---
         const canvas = document.getElementById('cv');
         const ctx = canvas.getContext('2d');
         const colors = ["#00ffff", "#ff00ff", "#00ff9f", "#ffff00"];
@@ -194,6 +207,7 @@ HTML_CODE = """
 
         function showInspect(av) {
             selectedKey = av.key;
+            document.getElementById('inspect-none').style.display = 'none';
             document.getElementById('inspect-ui').style.display = 'block';
             document.getElementById('i-name').innerText = av.name.toUpperCase();
             document.getElementById('i-img').src = `https://my-secondlife-p01.s3.amazonaws.com/users/${av.key.replace(/-/g, '_')}/thumb_sl_image.png`;
@@ -205,19 +219,19 @@ HTML_CODE = """
         function draw() {
             if (lastData) {
                 ctx.clearRect(0,0,512,512);
-                pulseVal += 0.12;
+                pulseVal += 0.1;
                 lastData.avatars.forEach((av, i) => {
                     const color = colors[i % colors.length];
                     const x = av.x * 2; const y = 512 - (av.y * 2);
                     if (selectedKey === av.key) {
-                        const s = 10 + Math.sin(pulseVal) * 5;
-                        ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x,y, s, 0, Math.PI*2); ctx.stroke();
-                        ctx.fillStyle = color; ctx.beginPath(); ctx.arc(x,y, 4, 0, Math.PI*2); ctx.fill();
-                        document.getElementById('i-time').innerText = "SESSION: " + formatDuration(av.start_time);
-                        document.getElementById('i-pos').innerText = `POS: ${Math.round(av.x)}, ${Math.round(av.y)}`;
+                        const s = 10 + Math.sin(pulseVal) * 4;
+                        ctx.strokeStyle = color; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(x,y, s, 0, Math.PI*2); ctx.stroke();
+                        ctx.fillStyle = color; ctx.beginPath(); ctx.arc(x,y, 3, 0, Math.PI*2); ctx.fill();
+                        document.getElementById('i-time').innerText = "UPTIME: " + formatDuration(av.start_time);
+                        document.getElementById('i-pos').innerText = `XY: ${Math.round(av.x)} / ${Math.round(av.y)}`;
                     } else {
-                        ctx.globalAlpha = selectedKey ? 0.2 : 0.8;
-                        ctx.fillStyle = color; ctx.beginPath(); ctx.arc(x,y, 5, 0, Math.PI*2); ctx.fill();
+                        ctx.globalAlpha = selectedKey ? 0.1 : 0.7;
+                        ctx.fillStyle = color; ctx.beginPath(); ctx.arc(x,y, 4, 0, Math.PI*2); ctx.fill();
                         ctx.globalAlpha = 1.0;
                     }
                 });
@@ -245,10 +259,10 @@ HTML_CODE = """
                 const card = document.createElement('div');
                 card.className = "card" + (selectedKey === av.key ? " selected" : "");
                 card.onclick = (e) => { if(e.target.tagName !== 'BUTTON') showInspect(av); };
-                card.innerHTML = `<b style="color:${colors[i%colors.length]}">> ${av.name}</b> 
-                                  <span class="pos-badge">${Math.round(av.x)},${Math.round(av.y)}</span><br>
-                                  <span class="timer-badge">[${formatDuration(av.start_time)}]</span>
-                                  <button class="quick-add" onclick="addToWatch('${av.key}', '${av.name}')" style="position:absolute;right:10px;top:10px;background:none;border:1px solid var(--magenta);color:var(--magenta);font-size:9px;cursor:pointer;">LOG</button>`;
+                card.innerHTML = `<span class="name-tag" style="color:${colors[i%colors.length]}">${av.name}</span>
+                                  <span class="pos-badge">${Math.round(av.x)}.${Math.round(av.y)}</span>
+                                  <span style="color:var(--cyan); margin-left:10px;">[${formatDuration(av.start_time)}]</span>
+                                  <button onclick="addToWatch('${av.key}', '${av.name}')" style="float:right; background:none; border:1px solid #333; color:#666; font-size:8px; cursor:pointer;">LOG</button>`;
                 feed.appendChild(card);
             });
             feed.scrollTop = scrollPos;
@@ -258,22 +272,16 @@ HTML_CODE = """
             Object.keys(d.watchlist).forEach(uuid => {
                 const info = d.watchlist[uuid];
                 const row = document.createElement('tr');
-                let c = info.online ? "var(--cyan)" : "#444";
+                let c = info.online ? "var(--cyan)" : "#333";
                 row.innerHTML = `<td><b>${info.name || '---'}</b></td>
-                                 <td style="color:${c}; font-weight:bold;">${info.online ? 'ON' : 'OFF'}</td>
-                                 <td>${info.arr_raw ? convertTimestamp(info.arr_raw) : '--:--'}</td>
-                                 <td>${info.dep_raw ? convertTimestamp(info.dep_raw) : '--:--'}</td>
-                                 <td><span style="color:var(--magenta); cursor:pointer;" onclick="removeWatch('${uuid}')">[X]</span></td>`;
+                                 <td style="color:${c}; font-weight:bold;">${info.online ? 'SYNC' : 'LOST'}</td>
+                                 <td>${info.arr_raw ? getFormattedTime(info.arr_raw) : '--:--'}</td>
+                                 <td>${info.dep_raw ? getFormattedTime(info.dep_raw) : '--:--'}</td>
+                                 <td><span style="color:var(--magenta); cursor:pointer;" onclick="removeWatch('${uuid}')">[-]</span></td>`;
                 wBody.appendChild(row);
             });
         }
-
-        function convertTimestamp(ts) {
-            return getFormattedTime(ts);
-        }
-
         function updateTimeDisplay() { fetchData(); }
-
         setInterval(fetchData, 2000);
         draw();
     </script>
@@ -281,6 +289,7 @@ HTML_CODE = """
 </html>
 """
 
+# ... (API Python inchangée par rapport à V8.0) ...
 @app.route('/api', methods=['GET', 'POST'])
 def handle():
     global db, times, watchlist
@@ -293,10 +302,8 @@ def handle():
             db["coords"] = data.get("grid_coords", {"x":0, "y":0})
             incoming = data.get("avatars", [])
             uids_present = [av.get("key") for av in incoming]
-            
             for uid in list(times.keys()):
                 if uid not in uids_present: del times[uid]
-            
             active_list = []
             for av in incoming:
                 uid = av.get("key")
@@ -306,8 +313,6 @@ def handle():
                     active_list.append(av)
                     if uid in watchlist: watchlist[uid]["name"] = av.get("name", "Unknown")
             db["avatars"] = active_list
-            
-            # Watchlist logic avec stockage de timestamp brut pour conversion JS
             for w_uid in list(watchlist.keys()):
                 try:
                     url = f"http://world.secondlife.com/resident/{w_uid}"
@@ -315,7 +320,6 @@ def handle():
                         content = f.read().decode('utf-8').lower()
                         is_on = "online" in content and "offline" not in content
                         if w_uid in uids_present: is_on = True
-                        
                         if is_on and not watchlist[w_uid]["online"]:
                             watchlist[w_uid]["arr_raw"] = now
                         elif not is_on and watchlist[w_uid]["online"]:
