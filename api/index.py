@@ -3,209 +3,199 @@ import time
 
 app = Flask(__name__)
 
-# Base de données ultra-stable (mémoire vive)
+# Base de données stable (stockage temporaire en mémoire vive)
 db = {
-    "region": "SYS_INITIALISATION...",
+    "region": "SEARCHING_SIGNAL...",
     "coords": {"x": 0, "y": 0},
-    "avatars": [] # Liste des avatars actifs détectés
+    "avatars": []
 }
-# Dictionnaire pour garder les temps de connexion (UUID: timestamp)
+# Dictionnaire pour le suivi du temps (UUID: timestamp)
 times = {}
 
-# --- L'interface CYBER PRO MIS A JOUR ---
-CYBER_HTML_V3_1 = """
+# --- INTERFACE CYBER CORE V3.2 (PC OPTIMIZED) ---
+HTML_CODE = """
 <!DOCTYPE html>
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CYBER_MONITOR // CORE_READOUT_V3.1</title>
+    <title>CYBER_MONITOR // CORE_READOUT_V3.2</title>
     <style>
-        /* Palette de couleurs Cyberpunk Ambre */
         :root {
-            --bg: #050505; /* Noir profond */
-            --bg-p: #0a0a0a; /* Panneau noir */
-            --p: #ffb000; /* Ambre Classique */
-            --p-d: #332200; /* Ambre éteint */
-            --a: #ff0000; /* Rouge Cible */
-            --txt: #e0e0e0;
+            --bg: #030303;
+            --panel: #0a0a0a;
+            --p: #ffb000; /* Ambre Cyber */
+            --p-dim: #332200;
+            --alert: #ff0000;
+            --text: #e0e0e0;
             --font: 'SF Mono', 'Fira Code', 'Roboto Mono', monospace;
         }
 
         body {
             background-color: var(--bg);
-            color: var(--txt);
+            color: var(--text);
             font-family: var(--font);
-            margin: 0; padding: 15px;
+            margin: 0; padding: 20px;
             display: flex; flex-direction: column; height: 100vh;
             overflow: hidden;
             background-image: radial-gradient(#111 1px, transparent 1px);
-            background-size: 20px 20px; /* Grille de fond subtile */
+            background-size: 25px 25px;
         }
 
-        /* --- En-tête Cyber --- */
+        /* En-tête */
         header {
             display: flex; justify-content: space-between; align-items: center;
-            padding-bottom: 10px; border-bottom: 2px solid var(--p-d);
-            margin-bottom: 15px;
-            position: relative;
+            padding-bottom: 10px; border-bottom: 2px solid var(--p-dim);
+            margin-bottom: 20px;
         }
-        h1 { margin: 0; font-size: 16px; letter-spacing: 3px; color: var(--p); text-shadow: 0 0 8px var(--p); }
-        #region-info { font-size: 12px; color: var(--txt); background: #111; padding: 2px 8px; border-radius: 4px; border: 1px solid #222; }
-        #status { font-size: 11px; opacity: 0.7; }
+        h1 { margin: 0; font-size: 18px; letter-spacing: 4px; color: var(--p); text-shadow: 0 0 10px var(--p); }
+        .sys-info { font-size: 12px; color: var(--p); border: 1px solid var(--p-dim); padding: 5px 15px; border-radius: 3px; background: #000; }
 
-        /* --- Grille Principale --- */
-        .grid {
+        /* Grille Principale */
+        .main-grid {
             display: grid;
-            grid-template-columns: 1.6fr 1.1fr; /* Carte/Liste équilibré */
-            gap: 15px; flex: 1; height: calc(100% - 60px);
+            grid-template-columns: 520px 1fr; /* Largeur fixe pour la carte */
+            gap: 25px; flex: 1; height: calc(100% - 80px);
         }
 
-        /* --- Zone Carte --- */
-        .panel-map {
-            background-color: var(--bg-p);
-            border: 1px solid var(--p-d);
-            border-radius: 4px;
-            display: flex; justify-content: center; align-items: center;
-            overflow: hidden;
-            position: relative;
-            box-shadow: inset 0 0 15px rgba(255,176,0,0.03);
-        }
-        .map-frame {
-            position: relative; width: 512px; height: 512px;
+        /* Cadre de la Carte (Correction Ratio) */
+        .map-container {
+            width: 512px; height: 512px;
             border: 2px solid var(--p);
-            background-color: black;
-            background-size: cover;
+            background-color: #000;
+            position: relative;
+            box-shadow: 0 0 20px rgba(255, 176, 0, 0.1);
+            overflow: hidden;
+        }
+        #map-bg {
+            width: 100%; height: 100%;
+            background-repeat: no-repeat;
+            background-size: 100% 100%; /* Force l'image à remplir le carré */
             background-position: center;
-            /* Effet de scanline subtil */
-            background-image: linear-gradient(0deg, rgba(0,0,0,0.1) 50%, rgba(255,255,255,0.01) 50%);
-            background-size: 100% 4px;
+            position: absolute; top:0; left:0;
         }
-        canvas { position: absolute; top:0; left:0; width: 100%; height: 100%; filter: drop-shadow(0 0 5px rgba(255,0,0,0.8)); }
+        canvas { position: absolute; top:0; left:0; z-index: 5; }
 
-        /* --- Zone Liste --- */
-        .panel-list {
-            background-color: var(--bg-p);
-            border: 1px solid var(--p-d);
-            border-radius: 4px;
-            padding: 15px;
+        /* Liste des Agents (Droite) */
+        .list-container {
+            background: var(--panel);
+            border: 1px solid var(--p-dim);
+            border-radius: 5px;
+            padding: 20px;
             overflow-y: auto;
-            scrollbar-width: thin; scrollbar-color: var(--p-d) var(--bg-p);
         }
-        .list-header { font-size: 11px; color: var(--p); font-weight: bold; padding-bottom: 10px; border-bottom: 1px solid var(--p-d); margin-bottom: 10px; letter-spacing: 1px; }
+        .list-header {
+            display: grid;
+            grid-template-columns: 30px 1fr 100px 80px;
+            font-size: 11px; color: var(--p);
+            font-weight: bold; padding-bottom: 10px;
+            border-bottom: 1px solid var(--p-dim);
+            margin-bottom: 15px;
+            text-transform: uppercase;
+        }
 
-        /* --- Ligne d'avatar PRO --- */
+        /* Ligne d'avatar */
         .av-row {
             display: grid;
-            grid-template-columns: 20px 1fr 100px 70px; /* Colonnes fixes */
+            grid-template-columns: 30px 1fr 100px 80px;
             gap: 10px; align-items: center;
-            padding: 10px 5px;
-            border-bottom: 1px solid rgba(255,176,0,0.05);
-            font-size: 12px;
-            position: relative;
-            transition: background 0.2s;
+            padding: 12px 5px;
+            border-bottom: 1px solid #1a1a1a;
+            font-size: 13px;
+            transition: 0.2s;
         }
-        .av-row:hover { background-color: rgba(255,176,0,0.03); }
-        .av-row::before { content: ''; position: absolute; left: 0; top: 10%; width: 2px; height: 80%; background: var(--p-d); }
-        .av-row:hover::before { background: var(--p); box-shadow: 0 0 5px var(--p); }
+        .av-row:hover { background: rgba(255, 176, 0, 0.05); }
+        .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--p); box-shadow: 0 0 10px var(--p); }
+        .name { font-weight: bold; color: #fff; text-transform: uppercase; }
+        .coord { color: var(--p); font-family: monospace; font-size: 12px; text-align: right; }
+        .time { color: #888; text-align: right; font-size: 12px; }
 
-        /* Cellules */
-        .c-stat { display: flex; justify-content: center; }
-        .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--p); box-shadow: 0 0 8px var(--p); animation: pulse 2s infinite; }
-        .c-name { color: white; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: bold; font-size: 13px; text-transform: uppercase; }
-        .c-pos { color: var(--p); text-align: right; letter-spacing: 1px; font-weight: bold; }
-        .c-time { color: var(--txt); text-align: right; opacity: 0.8; }
-
-        /* Animations */
-        @keyframes pulse { 0% { opacity: 0.5; } 50% { opacity: 1; } 100% { opacity: 0.5; } }
-
+        /* Effet Scanline */
+        .scanlines {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.1) 50%), 
+                        linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03));
+            background-size: 100% 3px, 3px 100%; pointer-events: none; z-index: 10;
+        }
     </style>
 </head>
 <body>
     <header>
-        <h1>[CYBER_MONITOR // CORE_READOUT]</h1>
-        <div id="region-info">SYS: <span style="color:var(--p)" id="reg-name">---</span> (<span id="reg-coords">0,0</span>)</div>
-        <div id="status">STATUS: <span style="color:var(--p)">LIVE_FEED</span> // OK</div>
+        <h1>[CYBER_CORE // SIM_MONITOR]</h1>
+        <div class="sys-info">REGION: <span id="r_name">---</span> // COORDS: <span id="r_coords">0,0</span></div>
     </header>
-    
-    <div class="grid">
-        <div class="panel-map">
-            <div class="map-frame" id="map-bg">
-                <canvas id="map-canvas" width="512" height="512"></canvas>
-            </div>
+
+    <div class="main-grid">
+        <div class="map-container">
+            <div id="map-bg"></div>
+            <div class="scanlines"></div>
+            <canvas id="cv" width="512" height="512"></canvas>
         </div>
 
-        <div class="panel-list">
-            <div class="list-header">// AGENTS_DETECTED // FEED</div>
-            <div id="list-container">
-                </div>
+        <div class="list-container">
+            <div class="list-header">
+                <span>ST</span><span>AGENT_IDENT</span><span style="text-align:right">POS_XY</span><span style="text-align:right">DURAT</span>
+            </div>
+            <div id="list-rows"></div>
         </div>
     </div>
 
     <script>
-        const canvas = document.getElementById('map-canvas');
+        const canvas = document.getElementById('cv');
         const ctx = canvas.getContext('2d');
-        const listC = document.getElementById('list-container');
-        const mapBg = document.getElementById('map-bg');
 
-        function fmtTimeCyber(seconds) {
-            const m = Math.floor(seconds / 60);
-            const s = Math.floor(seconds % 60);
-            return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-        }
-
-        async function updateMonitor() {
+        async function update() {
             try {
-                const response = await fetch('/api');
-                const data = await response.json();
+                const res = await fetch('/api');
+                const data = await res.json();
                 
-                // 1. Infos globales
-                if(data.region) {
-                    document.getElementById('reg-name').innerText = data.region.toUpperCase();
-                    document.getElementById('reg-coords').innerText = `${data.coords.x},${data.coords.y}`;
-                    const mapUrl = `https://map.secondlife.com/map-1-${data.coords.x}-${data.coords.y}-objects.jpg`;
-                    mapBg.style.backgroundImage = `url('${mapUrl}')`;
-                }
+                // Update Infos
+                document.getElementById('r_name').innerText = data.region.toUpperCase();
+                document.getElementById('r_coords').innerText = `${data.coords.x},${data.coords.y}`;
+                
+                // Update Map Background
+                const mapUrl = `https://map.secondlife.com/map-1-${data.coords.x}-${data.coords.y}-objects.jpg`;
+                document.getElementById('map-bg').style.backgroundImage = `url('${mapUrl}')`;
 
-                document.getElementById('status').innerHTML = `STATUS: <span style="color:var(--p)">LIVE_FEED</span> // ${data.avatars.length} TARGETS`;
+                // Update Canvas & List
+                ctx.clearRect(0,0,512,512);
+                const list = document.getElementById('list-rows');
+                list.innerHTML = "";
 
-                // 2. Nettoyage
-                ctx.clearRect(0, 0, 512, 512);
-                listC.innerHTML = "";
-
-                if (data.avatars.length === 0) {
-                    listC.innerHTML = "<div style='color:#333;text-align:center;margin-top:30px;font-size:10px;'>[ NO_TARGETS_IN_RANGE ]</div>";
-                }
-
-                // 3. Dessin et Liste
                 data.avatars.forEach(av => {
-                    // Carte (Canvas)
-                    const x = av.x * 2; const y = 512 - (av.y * 2);
-                    // Cible Rouge
-                    ctx.strokeStyle = "#ff0000"; ctx.lineWidth = 2; ctx.beginPath();
-                    ctx.moveTo(x-10,y); ctx.lineTo(x+10,y); ctx.moveTo(x,y-10); ctx.lineTo(x,y+10); ctx.stroke();
+                    const x = av.x * 2;
+                    const y = 512 - (av.y * 2);
+
+                    // Dessin Target (Croix de visée)
+                    ctx.strokeStyle = "red"; ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.moveTo(x-12, y); ctx.lineTo(x+12, y);
+                    ctx.moveTo(x, y-12); ctx.lineTo(x, y+12);
+                    ctx.stroke();
+                    
                     // Point central
                     ctx.fillStyle = "white"; ctx.beginPath(); ctx.arc(x,y,3,0,7); ctx.fill();
-                    // Nom
-                    ctx.fillStyle = "white"; ctx.font = "bold 11px 'SF Mono', monospace";
-                    ctx.fillText(av.name.toUpperCase(), x+14, y+4);
 
-                    // Liste (HTML PRO)
+                    // Nom sur carte
+                    ctx.fillStyle = "white"; ctx.font = "bold 12px monospace";
+                    ctx.shadowColor = "black"; ctx.shadowBlur = 4;
+                    ctx.fillText(av.name.toUpperCase(), x + 15, y + 5);
+                    ctx.shadowBlur = 0;
+
+                    // Ajout Liste
                     const row = document.createElement('div');
-                    row.className = 'av-row';
-                    const timeS = Math.floor(Date.now() / 1000) - av.start_time;
-
+                    row.className = "av-row";
+                    const elapsed = Math.floor((Date.now()/1000 - av.start_time)/60);
                     row.innerHTML = `
-                        <div class="c-stat"><span class="dot"></span></div>
-                        <div class="c-name">${av.name}</div>
-                        <div class="c-pos">${Math.floor(av.x)}, ${Math.floor(av.y)}</div>
-                        <div class="c-time">${fmtTimeCyber(timeS)}</div>
+                        <div class="dot"></div>
+                        <div class="name">${av.name}</div>
+                        <div class="coord">${Math.floor(av.x)}, ${Math.floor(av.y)}</div>
+                        <div class="time">${elapsed} MIN</div>
                     `;
-                    listC.appendChild(row);
+                    list.appendChild(row);
                 });
-            } catch (err) {}
+            } catch(e) { console.log("DATA_STREAM_ERROR"); }
         }
-        setInterval(updateMonitor, 2000);
+        setInterval(update, 2000);
     </script>
 </body>
 </html>
@@ -219,11 +209,9 @@ def handle():
             data = request.json
             if not data: return "No Data", 400
             
-            # Mise à jour sim
-            db["region"] = data.get("region", "Inconnue")
+            db["region"] = data.get("region", "UNKNOWN")
             db["coords"] = data.get("grid_coords", {"x":0, "y":0})
             
-            # Gestion avatars et temps
             incoming = data.get("avatars", [])
             active_list = []
             now = time.time()
@@ -232,16 +220,16 @@ def handle():
                 uid = av.get("key")
                 if uid:
                     if uid not in times:
-                        times[uid] = now # Nouvel avatar : on stocke l'heure de début
-                    av["start_time"] = times[uid] # On lui associe son heure de début
+                        times[uid] = now
+                    av["start_time"] = times[uid]
                     active_list.append(av)
             
             db["avatars"] = active_list
             return "OK", 200
-        except: return "Error", 500
+        except: return "ERROR", 500
             
     return jsonify(db)
 
 @app.route('/')
 def home():
-    return render_template_string(CYBER_HTML_V3_1)
+    return render_template_string(HTML_CODE)
