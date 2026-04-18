@@ -1,23 +1,24 @@
 from flask import Flask, request, jsonify, render_template_string
 import time
-import requests
+import urllib.request
 
 app = Flask(__name__)
 
+# Base de données
 db = {
     "region": "TACTICAL_NET_ACTIVE...",
     "coords": {"x": 0, "y": 0},
     "avatars": []
 }
 times = {}
-watchlist = {} # Stocke {uuid: {"start": timestamp, "status": bool}}
+watchlist = {} # {uuid: {"start": timestamp, "online": bool}}
 
 HTML_CODE = """
 <!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>TACTICAL_HUD // NOX_V6.2</title>
+    <title>TACTICAL_HUD // NOX_V6.3</title>
     <style>
         :root { --p: #00ffff; --bg: #010103; --panel: #05050a; --font: 'Fira Code', monospace; }
         body { background: var(--bg); color: #a0c0c0; font-family: var(--font); margin: 0; padding: 15px; height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
@@ -25,32 +26,35 @@ HTML_CODE = """
         
         .grid { display: grid; grid-template-columns: 512px 1fr 300px; grid-template-rows: 1fr 250px; gap: 15px; flex: 1; overflow: hidden; }
 
-        /* Colonnes Standard */
         .map-wrapper { grid-row: 1 / 3; width: 512px; height: 512px; border: 1px solid #222; background: #000; position: relative; }
-        #map-bg { width: 100%; height: 100%; position: absolute; opacity: 0.7; filter: brightness(0.6); }
+        #map-bg { width: 100%; height: 100%; position: absolute; opacity: 0.7; filter: brightness(0.6); background-size: cover; }
         canvas { position: absolute; top:0; left:0; z-index: 10; }
         
         .list { grid-row: 1 / 3; background: var(--panel); border: 1px solid #111; padding: 15px; overflow-y: auto; border-left: 2px solid var(--p); }
-        .card { background: rgba(255,255,255,0.01); border: 1px solid #1a1a1a; padding: 10px; margin-bottom: 8px; cursor: pointer; }
+        .card { background: rgba(255,255,255,0.01); border: 1px solid #1a1a1a; padding: 10px; margin-bottom: 8px; cursor: pointer; transition: 0.2s; }
+        .card:hover { background: rgba(0,255,255,0.1); border-color: var(--p); }
 
-        /* Inspecteur */
-        .inspector { background: #000; border: 1px solid #222; border-top: 2px solid var(--p); display: flex; flex-direction: column; }
+        .inspector { background: #000; border: 1px solid #222; border-top: 2px solid var(--p); padding: 10px; overflow: hidden; }
+        #i-img { width: 100%; aspect-ratio: 1; object-fit: cover; border: 1px solid #222; margin-bottom: 10px; display: none; }
         
-        /* Watchlist (Bas Droite) */
         .watchlist-panel { background: #05080a; border: 1px solid #1a2025; border-top: 2px solid #ff00ff; padding: 10px; display: flex; flex-direction: column; }
         .watch-input-group { display: flex; gap: 5px; margin-bottom: 10px; }
-        input { background: #000; border: 1px solid #333; color: var(--p); padding: 5px; flex: 1; font-family: inherit; font-size: 11px; }
+        input { background: #000; border: 1px solid #333; color: var(--p); padding: 5px; flex: 1; font-family: inherit; font-size: 11px; outline: none; }
         .add-btn { background: #ff00ff; color: #000; border: none; padding: 5px 10px; cursor: pointer; font-weight: bold; }
         
-        .watch-item { font-size: 11px; padding: 5px; border-bottom: 1px solid #111; display: flex; justify-content: space-between; align-items: center; }
-        .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 5px; }
+        .watch-item { font-size: 11px; padding: 6px; border-bottom: 1px solid #111; display: flex; justify-content: space-between; align-items: center; }
+        .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 8px; }
         .online { background: #00ff00; box-shadow: 0 0 5px #00ff00; }
         .offline { background: #ff0000; opacity: 0.3; }
+
+        ::-webkit-scrollbar { width: 3px; }
+        ::-webkit-scrollbar-thumb { background: var(--p); }
     </style>
 </head>
 <body>
     <header>
-        <div style="font-size: 16px; font-weight: bold; letter-spacing: 4px; color: var(--p);">[ TACTICAL_MONITOR_V6.2 ]</div>
+        <div style="font-size: 16px; font-weight: bold; letter-spacing: 4px; color: var(--p);">[ TACTICAL_MONITOR_V6.3 ]</div>
+        <div id="sim-name" style="font-size: 10px; color: #444;">SIGNAL_SEARCHING...</div>
     </header>
 
     <div class="grid">
@@ -59,18 +63,20 @@ HTML_CODE = """
         <div class="list" id="feed"></div>
 
         <div class="inspector">
-            <div id="inspect-ui" style="display:none; padding:10px;">
-                <img id="i-img" src="" style="width:100%; aspect-ratio:1; object-fit:cover; margin-bottom:10px;">
-                <div style="font-size:12px; color:#fff; font-weight:bold;" id="i-name">---</div>
-                <div style="font-size:10px; color:var(--p)" id="i-time">---</div>
-                <button id="i-btn" style="width:100%; margin-top:10px; padding:8px; cursor:pointer;">PROFIL WEB</button>
+            <div id="inspect-default" style="font-size:10px; text-align:center; margin-top:50px; opacity:0.3;">SÉLECTIONNEZ UN AGENT</div>
+            <div id="inspect-ui" style="display:none;">
+                <img id="i-img" src="" onload="this.style.display='block'">
+                <div style="font-size:12px; color:#fff; font-weight:bold; margin-bottom:5px;" id="i-name">---</div>
+                <div style="font-size:10px; color:var(--p); margin-bottom:10px;" id="i-time">DURÉE: --</div>
+                <div style="font-size:9px; color:#444; word-break:break-all;" id="i-key">---</div>
+                <button id="i-btn" style="width:100%; margin-top:15px; padding:10px; background:var(--p); border:none; font-weight:bold; cursor:pointer;">WEB PROFILE</button>
             </div>
         </div>
 
         <div class="watchlist-panel">
-            <div style="font-size:10px; color:#ff00ff; margin-bottom:8px; letter-spacing:1px;">// GLOBAL_WATCHLIST</div>
+            <div style="font-size:10px; color:#ff00ff; margin-bottom:8px; font-weight:bold;">// GLOBAL_WATCHLIST</div>
             <div class="watch-input-group">
-                <input type="text" id="watch-uuid" placeholder="Avatar UUID...">
+                <input type="text" id="watch-uuid" placeholder="Coller UUID...">
                 <button class="add-btn" onclick="addWatch()">ADD</button>
             </div>
             <div id="watch-list" style="overflow-y:auto; flex:1;"></div>
@@ -80,11 +86,11 @@ HTML_CODE = """
     <script>
         const canvas = document.getElementById('cv');
         const ctx = canvas.getContext('2d');
-        const colors = ["#00ffff", "#ff00ff", "#00ff9f", "#ffff00"];
+        const colors = ["#00ffff", "#ff00ff", "#00ff9f", "#ffff00", "#ff3f00"];
         let selectedKey = null;
 
         async function addWatch() {
-            const uuid = document.getElementById('watch-uuid').value;
+            const uuid = document.getElementById('watch-uuid').value.trim();
             if(uuid.length < 32) return;
             await fetch('/watch', {
                 method: 'POST',
@@ -96,12 +102,14 @@ HTML_CODE = """
 
         function showInspect(av) {
             selectedKey = av.key;
+            document.getElementById('inspect-default').style.display = 'none';
             document.getElementById('inspect-ui').style.display = 'block';
             document.getElementById('i-name').innerText = av.name.toUpperCase();
+            document.getElementById('i-key').innerText = av.key;
             document.getElementById('i-img').src = `https://my-secondlife-p01.s3.amazonaws.com/users/${av.key.replace(/-/g, '_')}/thumb_sl_image.png`;
             
-            const urlName = av.name.toLowerCase().replace(/ /g, '.');
-            document.getElementById('i-btn').onclick = () => window.open(`https://my.secondlife.com/${urlName.replace('.resident','')}`, '_blank');
+            const urlName = av.name.toLowerCase().replace(/ /g, '.').replace('.resident','');
+            document.getElementById('i-btn').onclick = () => window.open(`https://my.secondlife.com/${urlName}`, '_blank');
         }
 
         async function update() {
@@ -109,8 +117,9 @@ HTML_CODE = """
                 const r = await fetch('/api');
                 const d = await r.json();
                 
-                // Update Map & Local Avatars
+                document.getElementById('sim-name').innerText = "REGION: " + d.region.toUpperCase();
                 document.getElementById('map-bg').style.backgroundImage = `url('https://map.secondlife.com/map-1-${d.coords.x}-${d.coords.y}-objects.jpg')`;
+                
                 ctx.clearRect(0,0,512,512);
                 const feed = document.getElementById('feed'); feed.innerHTML = "";
                 
@@ -118,30 +127,28 @@ HTML_CODE = """
                     const color = colors[i % colors.length];
                     const x = av.x * 2; const y = 512 - (av.y * 2);
                     const timeS = Math.floor(Date.now()/1000 - av.start_time);
-                    if(selectedKey === av.key) document.getElementById('i-time').innerText = Math.floor(timeS/60) + "m " + (timeS%60) + "s";
+                    if(selectedKey === av.key) document.getElementById('i-time').innerText = "DURÉE: " + Math.floor(timeS/60) + "m " + (timeS%60) + "s";
                     
-                    ctx.strokeStyle = color; ctx.beginPath(); ctx.arc(x,y,6,0,7); ctx.stroke();
+                    ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x,y,6,0,7); ctx.stroke();
                     const card = document.createElement('div');
                     card.className = "card"; card.onclick = () => showInspect(av);
-                    card.innerHTML = `<b style="color:${color}">${av.name}</b><br><small>${Math.floor(timeS/60)}m</small>`;
+                    card.innerHTML = `<b style="color:${color}">${av.name}</b><br><small style="opacity:0.5">${Math.floor(timeS/60)}m active</small>`;
                     feed.appendChild(card);
                 });
 
-                // Update Watchlist UI
                 const wList = document.getElementById('watch-list');
                 wList.innerHTML = "";
                 Object.keys(d.watchlist).forEach(uuid => {
                     const info = d.watchlist[uuid];
                     const item = document.createElement('div');
                     item.className = "watch-item";
-                    const timeStr = info.online ? Math.floor((Date.now()/1000 - info.start)/60) + "m" : "OFFLINE";
+                    const statusText = info.online ? Math.floor((Date.now()/1000 - info.start)/60) + "m" : "OFFLINE";
                     item.innerHTML = `
                         <span><span class="dot ${info.online ? 'online' : 'offline'}"></span>${uuid.substring(0,8)}</span>
-                        <span style="color:${info.online ? '#00ff00' : '#444'}">${timeStr}</span>
+                        <span style="color:${info.online ? '#00ff00' : '#444'}">${statusText}</span>
                     `;
                     wList.appendChild(item);
                 });
-
             } catch(e){}
         }
         setInterval(update, 3000);
@@ -154,34 +161,35 @@ HTML_CODE = """
 def handle():
     global db, times, watchlist
     if request.method == 'POST':
-        data = request.json
-        db["region"] = data.get("region", "UNK")
-        db["coords"] = data.get("grid_coords", {"x":0, "y":0})
-        active = []
-        now = time.time()
-        for av in data.get("avatars", []):
-            uid = av.get("key")
-            if uid:
-                if uid not in times: times[uid] = now
-                av["start_time"] = times[uid]
-                active.append(av)
-        db["avatars"] = active
-        
-        # Background check watchlist status
-        for uuid in list(watchlist.keys()):
-            # Appel API Second Life pour le statut online
-            try:
-                # Utilisation d'un service public de tracking SL ou simulation ici
-                # Pour un vrai tracking, on utilise souvent l'URL de profil my.sl
-                is_on = "online" in requests.get(f"http://world.secondlife.com/resident/{uuid}").text.lower()
-                if is_on and not watchlist[uuid]["online"]:
-                    watchlist[uuid]["start"] = time.time()
-                watchlist[uuid]["online"] = is_on
-            except: pass
-
-        return "OK", 200
-    
-    # On renvoie tout au HUD
+        try:
+            data = request.json
+            db["region"] = data.get("region", "UNK")
+            db["coords"] = data.get("grid_coords", {"x":0, "y":0})
+            active = []
+            now = time.time()
+            for av in data.get("avatars", []):
+                uid = av.get("key")
+                if uid:
+                    if uid not in times: times[uid] = now
+                    av["start_time"] = times[uid]
+                    active.append(av)
+            db["avatars"] = active
+            
+            # Global Tracking avec urllib (standard library)
+            for uuid in list(watchlist.keys()):
+                try:
+                    url = f"http://world.secondlife.com/resident/{uuid}"
+                    with urllib.request.urlopen(url, timeout=2) as response:
+                        html = response.read().decode('utf-8').lower()
+                        is_on = "online" in html
+                        if is_on and not watchlist[uuid]["online"]:
+                            watchlist[uuid]["start"] = time.time()
+                        watchlist[uuid]["online"] = is_on
+                except:
+                    pass
+            return "OK", 200
+        except:
+            return "ERR", 500
     return jsonify({**db, "watchlist": watchlist})
 
 @app.route('/watch', methods=['POST'])
