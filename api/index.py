@@ -2,16 +2,15 @@ from flask import Flask, request, jsonify, render_template_string, session, redi
 import time
 
 app = Flask(__name__)
-app.secret_key = "NOX_ZETA_FINAL_V166"
+app.secret_key = "NOX_ZETA_CROSSREGION_V167"
 
-# Base de données en mémoire vive
 db = {
     "admin": {
         "pw": "1234",
         "region": "Initialisation...",
         "coords": {"x": 0, "y": 0},
         "avatars": [],
-        "watchlist": [] # Format: {"name":str, "uuid":str, "online_sl":bool, "last_ping":float}
+        "watchlist": [] # {"name":str, "uuid":str, "online_sl":bool, "last_ping":float}
     }
 }
 
@@ -22,7 +21,7 @@ INTERFACE_HTML = """
     <meta charset="UTF-8">
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700&family=Rajdhani:wght@500;700&display=swap" rel="stylesheet">
     <style>
-        :root { --cyan: #00ffff; --red: #ff3131; --green: #00ffaa; --bg: #020205; --border: rgba(0, 255, 255, 0.2); }
+        :root { --cyan: #00ffff; --red: #ff3131; --green: #00ffaa; --yellow: #f1c40f; --bg: #020205; --border: rgba(0, 255, 255, 0.2); }
         body { background: var(--bg); color: #e0e0e0; font-family: 'Rajdhani', sans-serif; margin: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
         header { height: 50px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; padding: 0 20px; background: #0a0a1a; }
         .main-container { display: flex; flex: 1; overflow: hidden; }
@@ -33,7 +32,7 @@ INTERFACE_HTML = """
         .name { color: var(--cyan); font-family: 'Orbitron'; font-size: 13px; }
         .status-badge { font-size: 9px; padding: 2px 5px; border-radius: 3px; font-weight: bold; margin-top: 5px; display: inline-block; border: 1px solid; }
         .st-local { color: var(--green); border-color: var(--green); background: rgba(0,255,170,0.1); }
-        .st-grid { color: #f1c40f; border-color: #f1c40f; background: rgba(241,196,15,0.1); }
+        .st-grid { color: var(--yellow); border-color: var(--yellow); background: rgba(241,196,15,0.1); }
         .st-off { color: #555; border-color: #444; background: rgba(255,255,255,0.02); }
         .action-btn { background: transparent; border: 1px solid var(--cyan); color: var(--cyan); cursor: pointer; float: right; padding: 2px 6px; }
         .map-frame { width: 512px; height: 512px; position: relative; border: 1px solid var(--cyan); background: #000; margin: auto; }
@@ -41,10 +40,10 @@ INTERFACE_HTML = """
         canvas { position: absolute; top: 0; left: 0; z-index: 5; pointer-events: none; }
     </style>
 </head>
-<body onload="setInterval(updateUI, 2000)">
+<body onload="setInterval(updateUI, 1500)">
     <header>
-        <div style="font-family:'Orbitron'; color:var(--cyan)">NOX//ZETA v1.6.6</div>
-        <div style="font-size:12px; color:var(--green)">REGION: <span id="reg-name">---</span></div>
+        <div style="font-family:'Orbitron'; color:var(--cyan)">NOX//ZETA v1.6.7</div>
+        <div style="font-size:12px; color:var(--green)">MONITORING: <span id="reg-name">---</span></div>
         <a href="/logout" style="color:var(--red); text-decoration:none; font-size:11px;">[ LOGOUT ]</a>
     </header>
 
@@ -53,11 +52,11 @@ INTERFACE_HTML = """
             <div class="map-frame"><div id="map-bg"></div><canvas id="radar-canvas" width="512" height="512"></canvas></div>
         </div>
         <div class="column" style="width: 27%;">
-            <div class="col-header">Scanner Local</div>
+            <div class="col-header">Radar Local (Sim)</div>
             <div id="scan-list" class="scroll-area"></div>
         </div>
         <div class="column" style="width: 28%;">
-            <div class="col-header" style="color:var(--red)">Watchlist Tracker</div>
+            <div class="col-header" style="color:var(--red)">Watchlist Global (Multi-Region)</div>
             <div id="watch-list" class="scroll-area"></div>
         </div>
     </div>
@@ -71,7 +70,8 @@ INTERFACE_HTML = """
 
                 document.getElementById('reg-name').innerText = data.region || "OFFLINE";
                 if(data.coords && data.coords.x > 0) {
-                    document.getElementById('map-bg').style.backgroundImage = `url('https://map.secondlife.com/map-1-${data.coords.x}-${data.coords.y}-objects.jpg')`;
+                    const cacheBuster = Math.floor(Date.now() / 60000); // Change toute les minutes
+                    document.getElementById('map-bg').style.backgroundImage = `url('https://map.secondlife.com/map-1-${data.coords.x}-${data.coords.y}-objects.jpg?t=${cacheBuster}')`;
                 }
 
                 // Scanner Local
@@ -81,16 +81,20 @@ INTERFACE_HTML = """
                         <span class="name">${av.name}</span>
                     </div>`).join('');
 
-                // Watchlist Tracker avec Heartbeat Check
+                // Watchlist Tracker (Multi-Region)
                 document.getElementById('watch-list').innerHTML = data.watchlist.map(w => {
                     const isLocal = data.avatars.find(a => a.uuid === w.uuid);
                     const now = Math.floor(Date.now() / 1000);
-                    // Heartbeat : Online seulement si ping < 45 secondes
-                    const isOnlineSL = w.online_sl && (now - w.last_ping < 45);
+                    
+                    // L'agent est ONLINE si : il est local OU si le statut Grid est vrai ET récent
+                    const isOnlineGrid = w.online_sl && (now - w.last_ping < 60);
                     
                     let stC = "st-off", stT = "OFFLINE";
-                    if (isLocal) { stC = "st-local"; stT = "SUR RADAR"; }
-                    else if (isOnlineSL) { stC = "st-grid"; stT = "EN LIGNE (GRID)"; }
+                    if (isLocal) { 
+                        stC = "st-local"; stT = "LOCAL (SIM)"; 
+                    } else if (isOnlineGrid) { 
+                        stC = "st-grid"; stT = "GRID (AUTRE REGION)"; 
+                    }
 
                     return `<div class="item" style="border-left: 3px solid ${isLocal?'var(--green)':'var(--red)'}">
                         <button class="action-btn" onclick="toggleWatch('${w.name}', '${w.uuid}')" style="border-color:var(--red);color:var(--red)">&times;</button>
@@ -147,7 +151,7 @@ def update_global():
         for agent in db[u]['watchlist']:
             if agent.get('uuid') == uuid:
                 agent['online_sl'] = status
-                agent['last_ping'] = time.time() # Mise à jour du timestamp
+                agent['last_ping'] = time.time()
     return "OK", 200
 
 @app.route('/get_watchlist_uuids')
