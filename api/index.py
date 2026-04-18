@@ -14,94 +14,115 @@ HTML_CODE = """
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <title>NOX_TACTICAL_V7.7</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NOX_CYBER_OPS_V7.8</title>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@300;500&family=Rajdhani:wght@300;500;700&display=swap" rel="stylesheet">
     <style>
-        :root { --p: #00ffff; --bg: #010103; --panel: #05050a; --font: 'Fira Code', monospace; }
-        body { background: var(--bg); color: #a0c0c0; font-family: var(--font); margin: 0; padding: 15px; height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
-        
-        header { border-bottom: 2px solid var(--p); background: rgba(0,255,255,0.02); padding: 10px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
-        
-        /* Layout */
-        .main-container { display: flex; flex: 1; overflow: hidden; border: 1px solid #222; background: #000; }
+        :root { 
+            --cyan: #00ffff; --magenta: #ff00ff; --bg: #050508; 
+            --panel: rgba(10, 12, 18, 0.95); --border: rgba(0, 255, 255, 0.2);
+        }
 
-        /* Zone Gauche */
-        .left-zone { display: flex; flex-direction: column; flex: 1; min-width: 512px; overflow: hidden; }
-        .map-wrapper { width: 512px; height: 512px; background: #000; position: relative; flex-shrink: 0; border-right: 1px solid #222; }
-        #map-bg { width: 100%; height: 100%; background-size: cover; position: absolute; opacity: 0.6; filter: brightness(0.4); }
+        * { box-sizing: border-box; }
+        body { 
+            background: var(--bg); 
+            color: #c0d0d0; 
+            font-family: 'Rajdhani', sans-serif; 
+            margin: 0; padding: 15px; height: 100vh; overflow: hidden; 
+            display: flex; flex-direction: column;
+            /* Effet Scanline Cyber */
+            background-image: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+            background-size: 100% 2px, 3px 100%;
+        }
+
+        header { 
+            border: 1px solid var(--border); background: var(--panel); 
+            padding: 10px 20px; margin-bottom: 10px; 
+            display: flex; justify-content: space-between; align-items: center;
+            box-shadow: 0 0 15px rgba(0, 255, 255, 0.1); flex-shrink: 0;
+        }
+
+        .main-container { display: flex; flex: 1; overflow: hidden; gap: 0; border: 1px solid var(--border); }
+
+        /* GAUCHE */
+        .left-zone { display: flex; flex-direction: column; flex: 1; min-width: 532px; overflow: hidden; background: rgba(0,0,0,0.4); }
+        .map-wrapper { width: 512px; height: 512px; margin: 10px; background: #000; position: relative; flex-shrink: 0; border: 1px solid #222; box-shadow: 0 0 20px rgba(0,0,0,1); }
+        #map-bg { width: 100%; height: 100%; background-size: cover; position: absolute; opacity: 0.5; filter: contrast(1.2) brightness(0.6) grayscale(0.5); }
         canvas { position: absolute; top:0; left:0; z-index: 10; cursor: crosshair; }
 
-        .watchlist-panel { flex: 1; background: #05080a; border-top: 2px solid #ff00ff; padding: 10px; display: flex; flex-direction: column; overflow: hidden; }
+        .watchlist-panel { flex: 1; background: var(--panel); border-top: 2px solid var(--magenta); padding: 15px; display: flex; flex-direction: column; overflow: hidden; }
 
-        /* Resizer (Poignée) */
-        .resizer { width: 12px; background: #0a0a0f; cursor: col-resize; transition: background 0.2s; z-index: 100; border-left: 1px solid #222; border-right: 1px solid #222; display: flex; align-items: center; justify-content: center; }
-        .resizer:hover { background: #1a1a25; border-color: var(--p); }
-        .resizer::after { content: "⋮"; color: #444; font-size: 18px; }
-
-        /* Zone Droite (Extensible) */
-        .right-zone { 
-            width: 400px; 
-            min-width: 150px; 
-            max-width: 90vw; /* Permet d'occuper presque tout l'écran */
-            display: flex; 
-            flex-direction: column; 
-            background: var(--bg); 
-            overflow: hidden; 
+        /* RESIZER */
+        .resizer { 
+            width: 10px; background: #0a0a10; cursor: col-resize; 
+            transition: 0.3s; z-index: 100; border-left: 1px solid #222; border-right: 1px solid #222;
+            display: flex; align-items: center; justify-content: center;
         }
+        .resizer:hover { background: var(--cyan); box-shadow: 0 0 15px var(--cyan); }
+
+        /* DROITE */
+        .right-zone { width: 400px; min-width: 250px; max-width: 80vw; display: flex; flex-direction: column; background: var(--panel); overflow: hidden; }
         
-        .inspector { background: #000; border-bottom: 1px solid #222; padding: 15px; min-height: 110px; flex-shrink: 0; display: flex; }
-        #i-img { width: 70px; height: 70px; border: 1px solid #333; margin-right: 15px; }
+        .inspector { 
+            background: rgba(0,0,0,0.6); border-bottom: 1px solid var(--border); 
+            padding: 15px; min-height: 110px; flex-shrink: 0; display: flex; 
+        }
+        #i-img { width: 80px; height: 80px; border: 1px solid var(--cyan); box-shadow: 0 0 10px rgba(0,255,255,0.2); margin-right: 15px; }
         
-        /* Liste avec Slider (Scrollbar) */
+        /* LISTE + SLIDER */
         .list { 
-            flex: 1; 
-            background: var(--panel); 
-            padding: 10px; 
-            overflow-y: auto; /* Active le scroll si ça déborde */
-            scrollbar-width: thin; /* Pour Firefox */
-            scrollbar-color: var(--p) #000;
+            flex: 1; padding: 10px; overflow-y: auto; 
+            scrollbar-width: thin; scrollbar-color: var(--cyan) transparent;
         }
-        
-        /* Style du Slider (Webkit) */
-        .list::-webkit-scrollbar { width: 6px; }
-        .list::-webkit-scrollbar-track { background: #000; }
-        .list::-webkit-scrollbar-thumb { background: #222; border-radius: 10px; border: 1px solid #111; }
-        .list::-webkit-scrollbar-thumb:hover { background: var(--p); }
+        .list::-webkit-scrollbar { width: 4px; }
+        .list::-webkit-scrollbar-thumb { background: var(--cyan); border-radius: 2px; }
 
-        .card { background: rgba(255,255,255,0.01); border: 1px solid #1a1a1a; padding: 12px; margin-bottom: 6px; cursor: pointer; position: relative; transition: 0.2s; }
-        .card:hover { border-color: #444; background: rgba(255,255,255,0.03); }
-        .card.selected { border-left: 4px solid var(--p); background: rgba(0,255,255,0.08); border-color: var(--p); }
+        .card { 
+            background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255,255,255,0.05); 
+            padding: 12px; margin-bottom: 8px; cursor: pointer; position: relative; 
+            transition: all 0.2s; font-family: 'Fira Code', monospace;
+        }
+        .card:hover { background: rgba(0, 255, 255, 0.05); border-color: var(--cyan); transform: translateX(5px); }
+        .card.selected { border-left: 4px solid var(--cyan); background: rgba(0, 255, 255, 0.1); border-color: var(--cyan); }
         
-        .quick-add { position: absolute; right: 10px; top: 12px; background: #ff00ff; color: #000; border: none; padding: 3px 8px; font-weight: bold; font-size: 9px; cursor: pointer; border-radius: 2px; }
-        
-        .w-table { width: 100%; border-collapse: collapse; font-size: 10px; }
-        .w-table th { text-align: left; color: #ff00ff; border-bottom: 1px solid #222; padding: 5px; opacity: 0.7; }
-        .w-table td { padding: 6px 5px; border-bottom: 1px solid #111; }
-        
-        .timer-badge { color: var(--p); font-size: 10px; background: rgba(0,255,255,0.1); padding: 2px 6px; border-radius: 2px; border: 1px solid rgba(0,255,255,0.2); }
-        input { background: #000; border: 1px solid #333; color: var(--p); padding: 6px; width: 140px; font-family: inherit; font-size: 11px; }
-        button.add-manual { background: #ff00ff; border: none; color: #000; padding: 6px 12px; font-weight: bold; font-size: 11px; cursor: pointer; }
+        .quick-add { 
+            position: absolute; right: 10px; top: 12px; 
+            background: transparent; color: var(--magenta); border: 1px solid var(--magenta); 
+            padding: 2px 8px; font-weight: bold; font-size: 10px; cursor: pointer; 
+        }
+        .quick-add:hover { background: var(--magenta); color: #000; }
+
+        /* TABLEAU */
+        .w-table { width: 100%; border-collapse: collapse; font-family: 'Fira Code', monospace; font-size: 11px; }
+        .w-table th { text-align: left; color: var(--magenta); padding: 8px; font-weight: 300; border-bottom: 1px solid rgba(255,0,255,0.2); }
+        .w-table td { padding: 8px; border-bottom: 1px solid rgba(255,255,255,0.05); }
+
+        .timer-badge { color: var(--cyan); font-size: 11px; font-weight: bold; }
+        input { background: #000; border: 1px solid var(--border); color: var(--cyan); padding: 8px; font-family: 'Fira Code'; font-size: 11px; outline: none; }
+        input:focus { border-color: var(--cyan); box-shadow: 0 0 10px rgba(0,255,255,0.2); }
+        button.action-btn { background: var(--magenta); border: none; color: #000; padding: 8px 15px; font-weight: bold; cursor: pointer; font-family: 'Rajdhani'; }
     </style>
 </head>
 <body>
     <header>
-        <div style="font-size: 16px; font-weight: bold; letter-spacing: 4px; color: var(--p);">[ NOX_CORE_V7.7 ]</div>
-        <div id="sim-status" style="font-size: 10px; opacity: 0.4; font-family: monospace;">SYSTEM_OPERATIONAL</div>
+        <div style="font-size: 20px; font-weight: 700; letter-spacing: 5px; color: var(--cyan); text-shadow: 0 0 10px var(--cyan);">NOX_TACTICAL_OS // V7.8</div>
+        <div id="sim-status" style="font-size: 12px; color: var(--magenta); font-family: 'Fira Code';">SYSTEM_ACTIVE</div>
     </header>
 
     <div class="main-container">
         <div class="left-zone">
             <div class="map-wrapper"><div id="map-bg"></div><canvas id="cv" width="512" height="512"></canvas></div>
             <div class="watchlist-panel">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                    <span style="font-size:10px; color:#ff00ff; font-weight:bold; letter-spacing:1px;">// TARGET_HISTORY</span>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                    <span style="font-size:14px; color:var(--magenta); font-weight:700; letter-spacing:2px;">[ HISTORIQUE_CIBLES ]</span>
                     <div>
-                        <input type="text" id="watch-uuid" placeholder="PASTE_UUID_HERE">
-                        <button class="add-manual" onclick="addWatchManual()">TRACK_TARGET</button>
+                        <input type="text" id="watch-uuid" placeholder="ID_TARGET_UUID">
+                        <button class="action-btn" onclick="addWatchManual()">TRACK_NEW</button>
                     </div>
                 </div>
                 <div style="overflow-y:auto; flex:1;" class="list">
                     <table class="w-table">
-                        <thead><tr><th>IDENTIFIER</th><th>STATUS</th><th>IN</th><th>OUT</th><th>ACTION</th></tr></thead>
+                        <thead><tr><th>IDENTIFIANT</th><th>STATUS</th><th>ARRIVE</th><th>DEPART</th><th>OPT</th></tr></thead>
                         <tbody id="watch-list-body"></tbody>
                     </table>
                 </div>
@@ -115,48 +136,30 @@ HTML_CODE = """
                 <div id="inspect-ui" style="display:none; width:100%;">
                     <img id="i-img" src="">
                     <div style="display:inline-block; vertical-align:top;">
-                        <div id="i-name" style="font-weight:bold; color:#fff; font-size:16px; margin-bottom:4px;">---</div>
-                        <div id="i-time" style="font-size:11px; color:var(--p); margin-bottom:8px; font-family:monospace;">---</div>
-                        <button id="i-btn" style="padding:5px 15px; background:var(--p); border:none; cursor:pointer; font-size:10px; font-weight:bold; color:#000;">OPEN_PROFILE</button>
+                        <div id="i-name" style="font-weight:700; color:#fff; font-size:20px; margin-bottom:4px; letter-spacing:1px;">---</div>
+                        <div id="i-time" style="font-size:12px; color:var(--cyan); margin-bottom:10px; font-family:'Fira Code';">---</div>
+                        <button id="i-btn" style="padding:6px 20px; background:var(--cyan); border:none; cursor:pointer; font-size:11px; font-weight:700; color:#000;">ACCESS_PROFILE</button>
                     </div>
                 </div>
-                <div id="inspect-none" style="text-align:center; width:100%; opacity:0.2; font-size:10px; margin-top:30px; letter-spacing:2px;">SCANNING...</div>
+                <div id="inspect-none" style="text-align:center; width:100%; opacity:0.3; font-size:12px; margin-top:35px; letter-spacing:4px;">AWAITING_DATA_INPUT...</div>
             </div>
-            <div class="list" id="feed">
-                </div>
+            <div class="list" id="feed"></div>
         </div>
     </div>
 
     <script>
-        // --- LOGIQUE RESIZE (AMÉLIORÉE) ---
         const resizer = document.getElementById('dragMe');
         const rightSide = document.getElementById('rightSide');
         let isResizing = false;
 
-        resizer.addEventListener('mousedown', (e) => {
-            isResizing = true;
-            document.body.style.cursor = 'col-resize';
-            resizer.style.background = 'var(--p)';
-        });
-
+        resizer.addEventListener('mousedown', (e) => { isResizing = true; document.body.style.cursor = 'col-resize'; });
         document.addEventListener('mousemove', (e) => {
             if (!isResizing) return;
             const newWidth = window.innerWidth - e.clientX;
-            // Limites de sécurité
-            if (newWidth > 150 && newWidth < (window.innerWidth - 550)) {
-                rightSide.style.width = `${newWidth}px`;
-            }
+            if (newWidth > 250 && newWidth < (window.innerWidth - 600)) { rightSide.style.width = `${newWidth}px`; }
         });
+        document.addEventListener('mouseup', () => { isResizing = false; document.body.style.cursor = 'default'; });
 
-        document.addEventListener('mouseup', () => {
-            if(isResizing) {
-                isResizing = false;
-                document.body.style.cursor = 'default';
-                resizer.style.background = '#0a0a0f';
-            }
-        });
-
-        // --- DATA & RADAR ---
         const canvas = document.getElementById('cv');
         const ctx = canvas.getContext('2d');
         const colors = ["#00ffff", "#ff00ff", "#00ff9f", "#ffff00", "#ff4444"];
@@ -166,9 +169,7 @@ HTML_CODE = """
 
         function formatDuration(start) {
             const diff = Math.floor(Date.now()/1000 - start);
-            const m = Math.floor(diff/60);
-            const s = diff % 60;
-            return m + "m " + s + "s";
+            return Math.floor(diff/60) + "m " + (diff % 60) + "s";
         }
 
         async function addToWatch(uuid, name) {
@@ -208,11 +209,11 @@ HTML_CODE = """
                     const x = av.x * 2; const y = 512 - (av.y * 2);
                     if (selectedKey === av.key) {
                         const s = 10 + Math.sin(pulseVal) * 5;
-                        ctx.strokeStyle = color; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(x,y, s, 0, Math.PI*2); ctx.stroke();
+                        ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x,y, s, 0, Math.PI*2); ctx.stroke();
                         ctx.fillStyle = color; ctx.beginPath(); ctx.arc(x,y, 4, 0, Math.PI*2); ctx.fill();
-                        document.getElementById('i-time').innerText = "LIVE_SESSION: " + formatDuration(av.start_time);
+                        document.getElementById('i-time').innerText = "LIVE_TIMER: " + formatDuration(av.start_time);
                     } else {
-                        ctx.globalAlpha = selectedKey ? 0.2 : 0.9;
+                        ctx.globalAlpha = selectedKey ? 0.2 : 0.8;
                         ctx.fillStyle = color; ctx.beginPath(); ctx.arc(x,y, 5, 0, Math.PI*2); ctx.fill();
                         ctx.globalAlpha = 1.0;
                     }
@@ -231,19 +232,19 @@ HTML_CODE = """
         }
 
         function renderUI(d) {
-            document.getElementById('sim-status').innerText = "LOC: " + d.region.toUpperCase();
+            document.getElementById('sim-status').innerText = "UPLINK_STABLE // " + d.region.toUpperCase();
             document.getElementById('map-bg').style.backgroundImage = `url('https://map.secondlife.com/map-1-${d.coords.x}-${d.coords.y}-objects.jpg')`;
             
             const feed = document.getElementById('feed');
-            const scrollPos = feed.scrollTop; // Garde la position du scroll
+            const scrollPos = feed.scrollTop;
             feed.innerHTML = "";
             d.avatars.forEach((av, i) => {
                 const card = document.createElement('div');
                 card.className = "card" + (selectedKey === av.key ? " selected" : "");
                 card.onclick = (e) => { if(e.target.tagName !== 'BUTTON') showInspect(av); };
-                card.innerHTML = `<b style="color:${colors[i%colors.length]}">${av.name}</b> 
-                                  <span class="timer-badge">${formatDuration(av.start_time)}</span><br>
-                                  <small style="opacity:0.2; font-size:9px;">${av.key}</small>
+                card.innerHTML = `<b style="color:${colors[i%colors.length]}">> ${av.name}</b> 
+                                  <span class="timer-badge">[${formatDuration(av.start_time)}]</span><br>
+                                  <small style="opacity:0.3; font-size:9px;">UID: ${av.key}</small>
                                   <button class="quick-add" onclick="addToWatch('${av.key}', '${av.name}')">LOG</button>`;
                 feed.appendChild(card);
             });
@@ -254,12 +255,12 @@ HTML_CODE = """
             Object.keys(d.watchlist).forEach(uuid => {
                 const info = d.watchlist[uuid];
                 const row = document.createElement('tr');
-                let c = info.online ? "#00ff00" : "#ff4444";
-                row.innerHTML = `<td><b>${info.name || '---'}</b><br><small style="opacity:0.2">${uuid}</small></td>
+                let c = info.online ? "var(--cyan)" : "#444";
+                row.innerHTML = `<td><b style="color:#fff">${info.name || '---'}</b><br><small style="opacity:0.2; font-size:8px;">${uuid}</small></td>
                                  <td style="color:${c}; font-weight:bold;">${info.online ? 'ONLINE' : 'OFFLINE'}</td>
-                                 <td style="color:#888">${info.arr || '--:--'}</td>
-                                 <td style="color:#888">${info.dep || '--:--'}</td>
-                                 <td><button onclick="removeWatch('${uuid}')" style="background:none; border:1px solid #411; color:#f44; cursor:pointer; padding:2px 6px;">DEL</button></td>`;
+                                 <td style="color:rgba(255,255,255,0.5)">${info.arr || '--:--'}</td>
+                                 <td style="color:rgba(255,255,255,0.5)">${info.dep || '--:--'}</td>
+                                 <td><span style="color:var(--magenta); cursor:pointer;" onclick="removeWatch('${uuid}')">[DEL]</span></td>`;
                 wBody.appendChild(row);
             });
         }
@@ -270,7 +271,6 @@ HTML_CODE = """
 </html>
 """
 
-# ... (Partie API Python identique aux versions précédentes) ...
 @app.route('/api', methods=['GET', 'POST'])
 def handle():
     global db, times, watchlist
