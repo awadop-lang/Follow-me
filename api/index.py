@@ -97,4 +97,151 @@ CYBER_HTML_V3_1 = """
         /* --- Ligne d'avatar PRO --- */
         .av-row {
             display: grid;
-            grid-template-columns: 20px 1fr 100px 7
+            grid-template-columns: 20px 1fr 100px 70px; /* Colonnes fixes */
+            gap: 10px; align-items: center;
+            padding: 10px 5px;
+            border-bottom: 1px solid rgba(255,176,0,0.05);
+            font-size: 12px;
+            position: relative;
+            transition: background 0.2s;
+        }
+        .av-row:hover { background-color: rgba(255,176,0,0.03); }
+        .av-row::before { content: ''; position: absolute; left: 0; top: 10%; width: 2px; height: 80%; background: var(--p-d); }
+        .av-row:hover::before { background: var(--p); box-shadow: 0 0 5px var(--p); }
+
+        /* Cellules */
+        .c-stat { display: flex; justify-content: center; }
+        .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--p); box-shadow: 0 0 8px var(--p); animation: pulse 2s infinite; }
+        .c-name { color: white; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: bold; font-size: 13px; text-transform: uppercase; }
+        .c-pos { color: var(--p); text-align: right; letter-spacing: 1px; font-weight: bold; }
+        .c-time { color: var(--txt); text-align: right; opacity: 0.8; }
+
+        /* Animations */
+        @keyframes pulse { 0% { opacity: 0.5; } 50% { opacity: 1; } 100% { opacity: 0.5; } }
+
+    </style>
+</head>
+<body>
+    <header>
+        <h1>[CYBER_MONITOR // CORE_READOUT]</h1>
+        <div id="region-info">SYS: <span style="color:var(--p)" id="reg-name">---</span> (<span id="reg-coords">0,0</span>)</div>
+        <div id="status">STATUS: <span style="color:var(--p)">LIVE_FEED</span> // OK</div>
+    </header>
+    
+    <div class="grid">
+        <div class="panel-map">
+            <div class="map-frame" id="map-bg">
+                <canvas id="map-canvas" width="512" height="512"></canvas>
+            </div>
+        </div>
+
+        <div class="panel-list">
+            <div class="list-header">// AGENTS_DETECTED // FEED</div>
+            <div id="list-container">
+                </div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('map-canvas');
+        const ctx = canvas.getContext('2d');
+        const listC = document.getElementById('list-container');
+        const mapBg = document.getElementById('map-bg');
+
+        function fmtTimeCyber(seconds) {
+            const m = Math.floor(seconds / 60);
+            const s = Math.floor(seconds % 60);
+            return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+        }
+
+        async function updateMonitor() {
+            try {
+                const response = await fetch('/api');
+                const data = await response.json();
+                
+                // 1. Infos globales
+                if(data.region) {
+                    document.getElementById('reg-name').innerText = data.region.toUpperCase();
+                    document.getElementById('reg-coords').innerText = `${data.coords.x},${data.coords.y}`;
+                    const mapUrl = `https://map.secondlife.com/map-1-${data.coords.x}-${data.coords.y}-objects.jpg`;
+                    mapBg.style.backgroundImage = `url('${mapUrl}')`;
+                }
+
+                document.getElementById('status').innerHTML = `STATUS: <span style="color:var(--p)">LIVE_FEED</span> // ${data.avatars.length} TARGETS`;
+
+                // 2. Nettoyage
+                ctx.clearRect(0, 0, 512, 512);
+                listC.innerHTML = "";
+
+                if (data.avatars.length === 0) {
+                    listC.innerHTML = "<div style='color:#333;text-align:center;margin-top:30px;font-size:10px;'>[ NO_TARGETS_IN_RANGE ]</div>";
+                }
+
+                // 3. Dessin et Liste
+                data.avatars.forEach(av => {
+                    // Carte (Canvas)
+                    const x = av.x * 2; const y = 512 - (av.y * 2);
+                    // Cible Rouge
+                    ctx.strokeStyle = "#ff0000"; ctx.lineWidth = 2; ctx.beginPath();
+                    ctx.moveTo(x-10,y); ctx.lineTo(x+10,y); ctx.moveTo(x,y-10); ctx.lineTo(x,y+10); ctx.stroke();
+                    // Point central
+                    ctx.fillStyle = "white"; ctx.beginPath(); ctx.arc(x,y,3,0,7); ctx.fill();
+                    // Nom
+                    ctx.fillStyle = "white"; ctx.font = "bold 11px 'SF Mono', monospace";
+                    ctx.fillText(av.name.toUpperCase(), x+14, y+4);
+
+                    // Liste (HTML PRO)
+                    const row = document.createElement('div');
+                    row.className = 'av-row';
+                    const timeS = Math.floor(Date.now() / 1000) - av.start_time;
+
+                    row.innerHTML = `
+                        <div class="c-stat"><span class="dot"></span></div>
+                        <div class="c-name">${av.name}</div>
+                        <div class="c-pos">${Math.floor(av.x)}, ${Math.floor(av.y)}</div>
+                        <div class="c-time">${fmtTimeCyber(timeS)}</div>
+                    `;
+                    listC.appendChild(row);
+                });
+            } catch (err) {}
+        }
+        setInterval(updateMonitor, 2000);
+    </script>
+</body>
+</html>
+"""
+
+@app.route('/api', methods=['GET', 'POST'])
+def handle():
+    global db, times
+    if request.method == 'POST':
+        try:
+            data = request.json
+            if not data: return "No Data", 400
+            
+            # Mise à jour sim
+            db["region"] = data.get("region", "Inconnue")
+            db["coords"] = data.get("grid_coords", {"x":0, "y":0})
+            
+            # Gestion avatars et temps
+            incoming = data.get("avatars", [])
+            active_list = []
+            now = time.time()
+            
+            for av in incoming:
+                uid = av.get("key")
+                if uid:
+                    if uid not in times:
+                        times[uid] = now # Nouvel avatar : on stocke l'heure de début
+                    av["start_time"] = times[uid] # On lui associe son heure de début
+                    active_list.append(av)
+            
+            db["avatars"] = active_list
+            return "OK", 200
+        except: return "Error", 500
+            
+    return jsonify(db)
+
+@app.route('/')
+def home():
+    return render_template_string(CYBER_HTML_V3_1)
