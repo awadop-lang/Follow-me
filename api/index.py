@@ -4,13 +4,13 @@ import time
 app = Flask(__name__)
 
 db = {
-    "region": "SECURE_SCANNING...",
+    "region": "SYS_INITIALIZING...",
     "coords": {"x": 0, "y": 0},
     "avatars": []
 }
 times = {}
 
-# --- INTERFACE TACTIQUE NOX V5.9 (FINAL PROFILE FIX) ---
+# --- INTERFACE TACTIQUE NOX V5.9 ---
 HTML_CODE = """
 <!DOCTYPE html>
 <html lang="fr">
@@ -24,33 +24,41 @@ HTML_CODE = """
         
         .grid { display: grid; grid-template-columns: 512px 1fr 300px; gap: 15px; flex: 1; overflow: hidden; }
 
-        .map-wrapper { width: 512px; height: 512px; border: 1px solid #222; background: #000; position: relative; overflow: hidden; }
-        #map-bg { width: 100%; height: 100%; background-size: 100% 100%; position: absolute; opacity: 0.8; filter: brightness(0.6); }
+        /* Carte */
+        .map-wrapper { width: 512px; height: 512px; border: 1px solid #222; background: #000; position: relative; overflow: hidden; box-shadow: 0 0 15px rgba(0,255,255,0.05); }
+        #map-bg { width: 100%; height: 100%; background-size: 100% 100%; position: absolute; opacity: 0.8; filter: brightness(0.6) saturate(0.7); }
         canvas { position: absolute; top:0; left:0; z-index: 10; }
         
+        /* Liste */
         .list { background: var(--panel); border: 1px solid #111; padding: 10px; overflow-y: auto; border-left: 2px solid var(--p); }
-        .card { background: rgba(255,255,255,0.01); border: 1px solid #1a1a1a; padding: 12px; margin-bottom: 8px; cursor: pointer; transition: 0.2s; }
+        .card { background: rgba(255,255,255,0.01); border: 1px solid #1a1a1a; padding: 12px; margin-bottom: 8px; cursor: pointer; transition: 0.2s ease; }
         .card:hover { background: rgba(0,255,255,0.1); border-color: var(--p); transform: translateX(5px); }
 
+        /* Inspecteur (Colonne de droite) */
         .inspector { background: #000; border: 1px solid #222; display: flex; flex-direction: column; border-top: 2px solid var(--p); }
         .inspect-header { padding: 10px; font-size: 10px; color: var(--p); background: rgba(0,255,255,0.05); text-align: center; letter-spacing: 2px; }
         
-        .inspect-photo-area { width: 100%; aspect-ratio: 1; background: #0a0a0a; border-bottom: 1px solid #222; display: flex; align-items: center; justify-content: center; position: relative; }
+        .inspect-photo-area { width: 100%; aspect-ratio: 1; background: #0a0a0a; border-bottom: 1px solid #222; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; }
         #i-img { width: 100%; height: 100%; object-fit: cover; z-index: 2; position: absolute; top:0; left:0; border: 0; display: none; }
-        .placeholder { font-size: 10px; opacity: 0.3; text-align: center; z-index: 1; }
+        .placeholder { font-size: 10px; opacity: 0.3; text-align: center; z-index: 1; padding: 20px; }
 
         .inspect-details { padding: 15px; flex: 1; overflow-y: auto; }
-        .label { font-size: 9px; color: var(--p); opacity: 0.6; margin-top: 12px; text-transform: uppercase; }
-        .val { font-size: 13px; color: #fff; font-weight: bold; margin-bottom: 4px; }
+        .label { font-size: 9px; color: var(--p); opacity: 0.6; margin-top: 12px; text-transform: uppercase; letter-spacing: 1px; }
+        .val { font-size: 13px; color: #fff; font-weight: bold; margin-bottom: 4px; word-break: break-all; }
 
-        .btn { width: 100%; padding: 12px; background: var(--p); color: #000; border: none; font-family: inherit; font-weight: bold; cursor: pointer; margin-top: 20px; text-transform: uppercase; }
+        .btn { width: 100%; padding: 12px; background: var(--p); color: #000; border: none; font-family: inherit; font-weight: bold; cursor: pointer; margin-top: 20px; text-transform: uppercase; transition: 0.2s; }
         .btn:hover { background: #fff; box-shadow: 0 0 10px var(--p); }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: #000; }
+        ::-webkit-scrollbar-thumb { background: var(--p); }
     </style>
 </head>
 <body>
     <header>
         <div style="font-size: 16px; font-weight: bold; letter-spacing: 4px; color: var(--p);">[ TACTICAL_HUD_V5.9 ]</div>
-        <div id="sim-info" style="font-size: 10px;">SIGNAL_STABLE</div>
+        <div id="sim-info" style="font-size: 10px;">AWAITING_UPLINK</div>
     </header>
 
     <div class="grid">
@@ -60,14 +68,14 @@ HTML_CODE = """
             <div class="inspect-header">// TARGET_INVESTIGATION</div>
             <div class="inspect-photo-area">
                 <img id="i-img" src="" onload="this.style.display='block'" onerror="this.style.display='none'">
-                <div class="placeholder">IMAGE_UNAVAILABLE<br><span style="font-size:8px;">PRIVATE PROFILE</span></div>
+                <div class="placeholder">PHOTO_OFFLINE<br><span style="font-size:8px;">PRIVATE_DATA_ENCRYPTED</span></div>
             </div>
             <div class="inspect-details">
-                <div class="label">Agent Identity</div><div id="i-name" class="val">---</div>
-                <div class="label">Duration</div><div id="i-time" class="val" style="color: var(--p);">00m 00s</div>
-                <div class="label">Coordinates</div><div id="i-pos" class="val">---</div>
+                <div class="label">Identité</div><div id="i-name" class="val">---</div>
+                <div class="label">Temps de Présence</div><div id="i-time" class="val" style="color: var(--p);">00m 00s</div>
+                <div class="label">Coordonnées</div><div id="i-pos" class="val">---</div>
                 <div class="label">UUID</div><div id="i-key" class="val" style="font-size:10px; color:#444;">---</div>
-                <button id="i-btn" class="btn" style="display:none;">Open Full Profile</button>
+                <button id="i-btn" class="btn" style="display:none;">Profil complet</button>
             </div>
         </div>
     </div>
@@ -90,7 +98,7 @@ HTML_CODE = """
             const btn = document.getElementById('i-btn');
             
             img.style.display = 'none';
-            // Tentative 1: Service S3 (Le plus fréquent pour les thumbnails)
+            // Tentative de récupération d'image via l'UUID formaté pour Amazon S3
             img.src = `https://my-secondlife-p01.s3.amazonaws.com/users/${av.key.replace(/-/g, '_')}/thumb_sl_image.png`;
             
             document.getElementById('i-name').innerText = av.name.toUpperCase();
@@ -98,10 +106,10 @@ HTML_CODE = """
             
             btn.style.display = 'block';
             
-            // --- FIX URL PROFIL ---
-            // On convertit "John Doe" en "john.doe"
-            const urlName = av.name.toLowerCase().replace(/ /g, '.');
-            btn.onclick = () => window.open(`https://my.secondlife.com/${urlName}`, '_blank');
+            // LOGIQUE DE LIEN ROBUSTE
+            const rawName = av.name.toLowerCase();
+            const profileLink = rawName.includes(' resident') ? rawName.replace(' resident', '') : rawName.replace(/ /g, '.');
+            btn.onclick = () => window.open(`https://my.secondlife.com/${profileLink}`, '_blank');
         }
 
         async function update() {
@@ -140,7 +148,7 @@ HTML_CODE = """
                     const card = document.createElement('div');
                     card.className = "card";
                     card.onclick = () => showProfile(av);
-                    card.innerHTML = `<b style="color:${color}">${av.name}</b><br><span style="font-size:9px; opacity:0.5;">DURATION: ${fmtTime(duration)}</span>`;
+                    card.innerHTML = `<b style="color:${color}">${av.name}</b><br><span style="font-size:9px; opacity:0.5;">DURÉE: ${fmtTime(duration)}</span>`;
                     feed.appendChild(card);
                 });
             } catch(e){}
@@ -149,3 +157,28 @@ HTML_CODE = """
     </script>
 </body>
 </html>
+"""
+
+@app.route('/api', methods=['GET', 'POST'])
+def handle():
+    global db, times
+    if request.method == 'POST':
+        try:
+            data = request.json
+            db["region"] = data.get("region", "UNK")
+            db["coords"] = data.get("grid_coords", {"x":0, "y":0})
+            active = []
+            now = time.time()
+            for av in data.get("avatars", []):
+                uid = av.get("key")
+                if uid:
+                    if uid not in times: times[uid] = now
+                    av["start_time"] = times[uid]
+                    active.append(av)
+            db["avatars"] = active
+            return "OK", 200
+        except: return "ERR", 500
+    return jsonify(db)
+
+@app.route('/')
+def home(): return render_template_string(HTML_CODE)
