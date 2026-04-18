@@ -3,323 +3,155 @@ import time
 
 app = Flask(__name__)
 
-# Base de données stable (stockage temporaire en mémoire vive)
 db = {
-    "region": "NET_SEARCHING...",
+    "region": "SECURE_LINK_INIT...",
     "coords": {"x": 0, "y": 0},
-    "avatars": [] # Liste des avatars actifs détectés
+    "avatars": []
 }
-# Dictionnaire pour le suivi du temps (UUID: timestamp)
 times = {}
+# Historique des positions pour les traînées (trails)
+history = {} 
 
-# Palette de couleurs Cyberpunk Néon (Cyan dominate, Magenta accent)
-# Ces couleurs seront attribuées aléatoirement aux avatars
-AGENT_COLORS = [
-    "#00ffff", # Cyan Électrique
-    "#ff00ff", # Magenta Néon
-    "#00ff9f", # Vert Matrice
-    "#7f00ff", # Violet Profond
-    "#ffff00", # Jaune Canari
-    "#ff3f00", # Orange Brûlé
-    "#007fff"  # Bleu Azur
-]
+AGENT_COLORS = ["#00ffff", "#ff00ff", "#00ff9f", "#7f00ff", "#ffff00", "#ff3f00", "#007fff"]
 
-# --- INTERFACE NEON CYBER CORE V4.1 (PC OPTIMIZED) ---
 HTML_CODE = """
 <!DOCTYPE html>
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <title>NEON_MONITOR // CORE_V4.1 // CYAN_PROTOCOL</title>
+    <title>TACTICAL_HUD // NOX_PROTOCOL_V5</title>
     <style>
         :root {
-            --bg: #010103; /* Noir/Bleu très profond */
-            --panel: #050509; /* Panneau sombre bleu */
-            --p: #00ffff; /* Cyan Néon Principal */
-            --p-dim: #004444; /* Cyan éteint */
-            --accent: #ff00ff; /* Magenta Néon Accent */
-            --text: #c0e0e0; /* Texte bleu très clair */
-            --font: 'SF Mono', 'Fira Code', 'Roboto Mono', monospace;
+            --bg: #020205; --panel: #05050a; --p: #00ffff; --accent: #ff00ff;
+            --text: #a0c0c0; --font: 'Fira Code', monospace;
         }
-
         body {
-            background-color: var(--bg);
-            color: var(--text);
-            font-family: var(--font);
-            margin: 0; padding: 20px;
-            display: flex; flex-direction: column; height: 100vh;
-            overflow: hidden;
-            background-image: 
-                radial-gradient(var(--panel) 1px, transparent 1px),
-                linear-gradient(rgba(0, 255, 255, 0.03) 1px, transparent 1px);
-            background-size: 20px 20px, 100px 100px; /* Grille de fond complexe */
-            box-shadow: inset 0 0 100px rgba(0, 255, 255, 0.05); /* Halo global */
+            background-color: var(--bg); color: var(--text); font-family: var(--font);
+            margin: 0; padding: 15px; height: 100vh; overflow: hidden;
+            display: flex; flex-direction: column;
         }
-
-        /* En-tête Cyber Néon */
-        header {
-            display: flex; justify-content: space-between; align-items: center;
-            padding-bottom: 10px; border-bottom: 2px solid var(--p-dim);
-            margin-bottom: 20px;
-            position: relative;
-        }
-        header::after { /* Effet de lueur sous la bordure */
-            content: ''; position: absolute; bottom: -2px; left: 0; width: 100%; height: 2px;
-            background: var(--p); box-shadow: 0 0 15px var(--p);
-        }
-        h1 { margin: 0; font-size: 18px; letter-spacing: 4px; color: var(--p); text-shadow: 0 0 10px var(--p); text-transform: uppercase; }
-        .sys-info { font-size: 12px; color: var(--text); border: 1px solid var(--p-dim); padding: 5px 15px; border-radius: 3px; background: rgba(0,0,0,0.5); box-shadow: 0 0 5px rgba(0,255,255,0.1); }
-
-        /* Grille Principale */
-        .main-grid {
-            display: grid;
-            grid-template-columns: 520px 1fr; /* Largeur fixe pour la carte */
-            gap: 25px; flex: 1; height: calc(100% - 80px);
-        }
-
-        /* Zone Carte (Gauche) */
-        .map-outer {
-            display: flex; flex-direction: column; gap: 10px;
-        }
-        .map-container {
-            width: 512px; height: 512px;
-            border: 2px solid var(--p-dim);
-            background-color: #000;
-            position: relative;
-            box-shadow: 0 0 20px rgba(0, 255, 255, 0.1);
-            overflow: hidden;
-            transition: border-color 0.3s;
-        }
-        .map-container:hover { border-color: var(--p); box-shadow: 0 0 30px rgba(0, 255, 255, 0.2); }
         
-        #map-bg {
-            width: 100%; height: 100%;
-            background-repeat: no-repeat;
-            background-size: 100% 100%; /* Ratio Forcé */
-            background-position: center;
-            position: absolute; top:0; left:0;
-            filter: saturate(0.7) brightness(0.8); /* Ambiance plus sombre */
-        }
-        canvas { position: absolute; top:0; left:0; z-index: 5; }
-
-        /* Effet Scanline & Glitch */
-        .overlay {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.15) 50%), 
-                        linear-gradient(90deg, rgba(0, 255, 255, 0.02), rgba(255, 0, 255, 0.01), rgba(0, 255, 255, 0.02));
-            background-size: 100% 4px, 4px 100%; pointer-events: none; z-index: 10;
-            opacity: 0.6;
+        /* Header Tactique */
+        header {
+            display: flex; justify-content: space-between; align-items: flex-end;
+            padding: 10px; border: 1px solid var(--p); background: rgba(0,255,255,0.05);
+            margin-bottom: 15px; clip-path: polygon(0 0, 100% 0, 98% 100%, 2% 100%);
         }
 
-        /* Liste des Agents (Droite) */
-        .list-container {
-            background: var(--panel);
-            border: 1px solid var(--p-dim);
-            border-radius: 4px;
-            padding: 20px;
-            overflow-y: auto;
-            position: relative;
-            box-shadow: inset 0 0 20px rgba(0, 255, 255, 0.03);
-        }
-        .list-header {
-            font-size: 11px; color: var(--p);
-            font-weight: bold; padding-bottom: 10px;
-            border-bottom: 1px solid var(--p-dim);
-            margin-bottom: 15px;
-            text-transform: uppercase; letter-spacing: 2px;
-            text-shadow: 0 0 5px var(--p);
-        }
+        .main-layout { display: grid; grid-template-columns: 530px 1fr 250px; gap: 15px; flex: 1; overflow: hidden; }
 
-        /* Ligne d'avatar PRO */
-        .av-row {
-            display: grid;
-            grid-template-columns: 20px 1fr 100px 70px; /* Colonnes fixes */
-            gap: 10px; align-items: center;
-            padding: 12px 5px;
-            border-bottom: 1px solid rgba(0, 255, 255, 0.05);
-            font-size: 13px;
-            transition: background 0.2s;
-            position: relative;
-        }
-        .av-row:hover { background: rgba(0, 255, 255, 0.03); cursor: pointer; }
-        .av-row::before { /* Ligne technique verticale */
-            content: ''; position: absolute; left: 0; top: 10%; width: 2px; height: 80%; background: var(--p-dim);
-        }
-        .av-row:hover::before { background: var(--p); box-shadow: 0 0 5px var(--p); }
+        /* Bloc Carte */
+        .map-wrapper { position: relative; width: 512px; height: 512px; border: 1px solid var(--p); background: #000; }
+        #map-bg { width: 100%; height: 100%; background-size: 100% 100%; position: absolute; opacity: 0.6; filter: grayscale(0.5) contrast(1.2); }
+        canvas { position: absolute; top:0; left:0; z-index: 10; }
 
-        /* Cellules */
-        .c-stat { display: flex; justify-content: center; }
-        .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--p); box-shadow: 0 0 8px var(--p); animation: pulse 2s infinite; }
-        .c-name { color: white; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: bold; font-size: 13px; text-transform: uppercase; }
-        .c-pos { color: var(--p); text-align: right; letter-spacing: 1px; font-weight: bold; }
-        .c-time { color: var(--text); text-align: right; opacity: 0.8; }
+        /* Bloc Liste Agents */
+        .agent-list { background: var(--panel); border: 1px solid #111; padding: 15px; overflow-y: auto; border-left: 3px solid var(--p); }
+        .av-card { 
+            background: rgba(255,255,255,0.02); margin-bottom: 10px; padding: 10px; 
+            border: 1px solid #1a1a1a; position: relative;
+        }
+        .prog-bar { width: 100%; height: 2px; background: #111; margin-top: 8px; }
+        .prog-fill { height: 100%; transition: width 0.5s; }
 
-        /* Barre de progression du temps (CYAN) */
-        .progress-box { grid-column: 2 / -1; margin-top: 5px; }
-        .progress-bg { width: 100%; height: 3px; background: #080810; border-radius: 1px; overflow: hidden; border: 1px solid #111; }
-        .progress-fill { height: 100%; width: 0%; transition: width 1s; box-shadow: 0 0 10px currentColor; }
+        /* Bloc Logs */
+        .log-panel { background: #000; border: 1px solid #222; padding: 10px; font-size: 10px; color: #555; overflow-y: hidden; }
+        .log-entry { border-bottom: 1px solid #111; padding: 3px 0; }
+        .log-in { color: var(--p); }
+        .log-out { color: var(--accent); }
 
         /* Animations */
-        @keyframes pulse { 0% { opacity: 0.5; } 50% { opacity: 1; } 100% { opacity: 0.5; } }
-        @keyframes glitch-text { 0% { text-shadow: 0 0 8px var(--p); } 1% { text-shadow: 2px 0 var(--accent), -2px 0 var(--p); } 2% { text-shadow: 0 0 8px var(--p); } 100% { text-shadow: 0 0 8px var(--p); } }
-
+        @keyframes scan { from { top: 0; } to { top: 100%; } }
+        .scanner-line { 
+            position: absolute; width: 100%; height: 2px; background: rgba(0,255,255,0.2); 
+            z-index: 11; animation: scan 3s linear infinite; box-shadow: 0 0 10px var(--p);
+        }
     </style>
 </head>
 <body>
     <header>
-        <h1 style="animation: glitch-text 5s infinite;">[CYBER_CORE // NEON_PROTOCOL]</h1>
-        <div class="sys-info">SYS: <span style="color:var(--p)" id="r_name">---</span> // NET_COORDS: <span id="r_coords">000,000</span></div>
+        <div style="font-size: 20px; font-weight: bold; letter-spacing: 5px;">TACTICAL_HUD V5.0</div>
+        <div id="sim-id" style="color:var(--p)">CONNECTED // REGION_UNK</div>
     </header>
 
-    <div class="main-grid">
-        <div class="map-outer">
-            <div class="map-container">
-                <div id="map-bg"></div>
-                <div class="overlay"></div>
-                <canvas id="cv" width="512" height="512"></canvas>
-            </div>
-            <div style="font-size:10px; color:var(--p-dim); text-align:center;">// LIVE_MAP_FEED // RATIO_FORCED_1:1</div>
+    <div class="main-layout">
+        <div class="map-wrapper">
+            <div id="map-bg"></div>
+            <div class="scanner-line"></div>
+            <canvas id="cv" width="512" height="512"></canvas>
         </div>
 
-        <div class="list-container">
-            <div class="list-header">
-                <span>ST</span><span>AGENT_IDENT</span><span style="text-align:right">POS_XY</span><span style="text-align:right">DURATION</span>
-            </div>
-            <div id="list-rows">
-                </div>
+        <div class="agent-list" id="agent-feed">
+            <div style="color:var(--p); font-size: 12px; margin-bottom: 15px;">// ACTIVE_TARGET_STREAM</div>
+        </div>
+
+        <div class="log-panel">
+            <div style="color:#aaa; border-bottom: 1px solid #333; margin-bottom: 5px;">SESSION_LOGS</div>
+            <div id="logs"></div>
         </div>
     </div>
 
     <script>
         const canvas = document.getElementById('cv');
         const ctx = canvas.getContext('2d');
-        const listRows = document.getElementById('list-rows');
-        const mapBg = document.getElementById('map-bg');
-
-        // Palette de couleurs Cyberpunk Néon pour différencier les noms sur la map
         const agentColors = ["#00ffff", "#ff00ff", "#00ff9f", "#7f00ff", "#ffff00", "#ff3f00", "#007fff"];
+        let trailMap = {}; // Stocke les positions précédentes
 
-        function fmtTimeCyber(seconds) {
-            const m = Math.floor(seconds / 60);
-            const s = Math.floor(seconds % 60);
-            return `${m.toString().padStart(2, '0')}M ${s.toString().padStart(2, '0')}S`;
-        }
-
-        async function updateMonitor() {
+        async function loop() {
             try {
-                const response = await fetch('/api');
-                const data = await response.json();
+                const res = await fetch('/api');
+                const d = await res.json();
                 
-                // 1. Infos globales
-                if(data.region) {
-                    document.getElementById('r_name').innerText = data.region.toUpperCase();
-                    document.getElementById('r_coords').innerText = `${data.coords.x.toString().padStart(3, '0')},${data.coords.y.toString().padStart(3, '0')}`;
-                    const mapUrl = `https://map.secondlife.com/map-1-${data.coords.x}-${data.coords.y}-objects.jpg`;
-                    mapBg.style.backgroundImage = `url('${mapUrl}')`;
-                }
+                document.getElementById('sim-id').innerText = `REGION: ${d.region.toUpperCase()} // COORDS: ${d.coords.x},${d.coords.y}`;
+                document.getElementById('map-bg').style.backgroundImage = `url('https://map.secondlife.com/map-1-${d.coords.x}-${d.coords.y}-objects.jpg')`;
 
-                // 2. Nettoyage
-                ctx.clearRect(0, 0, 512, 512);
-                listRows.innerHTML = "";
+                ctx.clearRect(0,0,512,512);
+                const feed = document.getElementById('agent-feed');
+                feed.innerHTML = "";
 
-                if (data.avatars.length === 0) {
-                    listRows.innerHTML = "<div style='color:#333;text-align:center;margin-top:30px;font-size:11px;'>[ NO_TARGETS_IN_RANGE ]</div>";
-                }
+                d.avatars.forEach((av, i) => {
+                    const color = agentColors[i % agentColors.length];
+                    const x = av.x * 2; const y = 512 - (av.y * 2);
 
-                // 3. Dessin et Liste
-                data.avatars.forEach((av, index) => {
-                    // Attribution d'une couleur unique basée sur l'index
-                    const aColor = agentColors[index % agentColors.length];
-                    
-                    // --- Carte (Canvas) ---
-                    // Conversion coords SL (256x256) vers Canvas (512x512)
-                    const x = av.x * 2;
-                    const y = 512 - (av.y * 2);
+                    // --- Gestion des Trails (Traces) ---
+                    if(!trailMap[av.key]) trailMap[av.key] = [];
+                    trailMap[av.key].push({x, y});
+                    if(trailMap[av.key].length > 10) trailMap[av.key].shift();
 
-                    // Croix de ciblage technique (Couleur Néon de l'agent)
-                    ctx.strokeStyle = aColor; ctx.lineWidth = 2; ctx.beginPath();
-                    ctx.moveTo(x-12,y); ctx.lineTo(x+12,y); ctx.moveTo(x,y-12); ctx.lineTo(x,y+12); ctx.stroke();
-                    
-                    // Point central brillant (Blanc)
-                    ctx.fillStyle = "white"; ctx.shadowBlur = 10; ctx.shadowColor = aColor;
-                    ctx.beginPath(); ctx.arc(x,y,3,0, Math.PI * 2); ctx.fill();
+                    // Dessin Trail
+                    ctx.beginPath();
+                    ctx.strokeStyle = color; ctx.globalAlpha = 0.3; ctx.lineWidth = 1;
+                    trailMap[av.key].forEach((p, idx) => {
+                        if(idx === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
+                    });
+                    ctx.stroke();
+                    ctx.globalAlpha = 1.0;
 
-                    // Nom sur carte (Blanc avec contour pour lisibilité)
-                    ctx.shadowBlur = 0;
-                    ctx.fillStyle = "white"; ctx.font = "bold 11px 'SF Mono', monospace";
-                    ctx.strokeStyle = "black"; ctx.lineWidth = 2;
-                    ctx.strokeText(av.name.toUpperCase(), x + 15, y + 4); // Contour
-                    ctx.fillText(av.name.toUpperCase(), x + 15, y + 4); // Texte
+                    // Dessin Target
+                    ctx.strokeStyle = color; ctx.lineWidth = 2;
+                    ctx.beginPath(); ctx.arc(x,y, 8, 0, 7); ctx.stroke();
+                    ctx.fillStyle = "white"; ctx.beginPath(); ctx.arc(x,y, 2, 0, 7); ctx.fill();
+                    ctx.font = "9px monospace"; ctx.fillText(av.name.toUpperCase(), x + 12, y + 4);
 
-                    // --- Liste (HTML PRO) ---
-                    const row = document.createElement('div');
-                    row.className = 'av-row';
-                    
-                    // Calcul temps de connexion
-                    const currentTime = Math.floor(Date.now() / 1000);
-                    const timeOnSim = currentTime - av.start_time;
-                    
-                    // Calcul progression (max 60 min = 100%)
-                    const progressPercent = Math.min(100, (timeOnSim / 3600) * 100);
+                    // HTML Feed
+                    const timeS = Math.floor(Date.now()/1000 - av.start_time);
+                    const p = Math.min(100, (timeS / 1800) * 100); // 30 min full
 
-                    row.innerHTML = `
-                        <div class="c-stat"><span class="dot"></span></div>
-                        <div class="c-name">${av.name}</div>
-                        <div class="c-pos">${Math.floor(av.x).toString().padStart(3, '0')}, ${Math.floor(av.y).toString().padStart(3, '0')}</div>
-                        <div class="c-time">${fmtTimeCyber(timeOnSim)}</div>
-                        <div class="progress-box">
-                            <div class="progress-bg">
-                                <div class="progress-fill" style="width:${progressPercent}%; background-color:${aColor}; color:${aColor}"></div>
-                            </div>
+                    const card = document.createElement('div');
+                    card.className = "av-card";
+                    card.innerHTML = `
+                        <div style="display:flex; justify-content:space-between; font-size:11px;">
+                            <span style="color:${color}; font-weight:bold;">${av.name}</span>
+                            <span>${Math.floor(av.x)},${Math.floor(av.y)}</span>
                         </div>
+                        <div class="prog-bar"><div class="prog-fill" style="width:${p}%; background:${color}; box-shadow: 0 0 5px ${color}"></div></div>
+                        <div style="font-size:9px; margin-top:5px; color:#555;">UPTIME: ${Math.floor(timeS/60)}M ${timeS%60}S</div>
                     `;
-                    listRows.appendChild(row);
+                    feed.appendChild(card);
                 });
-
-            } catch (err) { console.log("DATA_STREAM_ERROR // NET_LOSS", err); }
+            } catch(e) {}
         }
-        setInterval(updateMonitor, 2000); // Mise à jour toutes les 2 secondes
+        setInterval(loop, 2000);
     </script>
 </body>
 </html>
-"""
-
-@app.route('/api', methods=['GET', 'POST'])
-def handle_api():
-    global db, times
-    if request.method == 'POST':
-        try:
-            data = request.json
-            if not data: return "No Data", 400
-            
-            # Mise à jour des infos sim
-            db["region"] = data.get("region", "UNKNOWN")
-            db["coords"] = data.get("grid_coords", {"x":0, "y":0})
-            
-            # Gestion des avatars et du temps de connexion
-            incoming = data.get("avatars", [])
-            active_list = []
-            now = time.time()
-            
-            for av in incoming:
-                uid = av.get("key")
-                if uid:
-                    # Si c'est un nouvel avatar, on stocke son heure d'arrivée
-                    if uid not in times:
-                        times[uid] = now
-                    # On lui associe son heure de début stockée
-                    av["start_time"] = times[uid]
-                    active_list.append(av)
-            
-            db["avatars"] = active_list
-            return "OK", 200
-        except Exception as e:
-            print(f"Error: {e}")
-            return str(e), 500
-            
-    # GET : Renvoyer la base de données actuelle
-    return jsonify(db)
-
-@app.route('/')
-def home():
-    return render_template_string(HTML_CODE)
