@@ -1,9 +1,9 @@
 from flask import Flask, request, jsonify, render_template_string, session, redirect, url_for
 
 app = Flask(__name__)
-app.secret_key = "NOX_ZETA_PRO_V4"
+app.secret_key = "NOX_ZETA_LOGS_V5"
 
-# Base de données temporaire pour les positions
+# Base de données temporaire (RAZ au déploiement)
 users_db = {
     "admin": {
         "pw": "1234", 
@@ -35,38 +35,39 @@ INTERFACE_HTML = """
         .scroll-area { flex: 1; overflow-y: auto; padding: 10px; scrollbar-width: thin; }
         
         /* Cartes Avatars */
-        .item { background: rgba(255,255,255,0.03); border: 1px solid var(--border); padding: 10px; margin-bottom: 8px; transition: 0.2s; position: relative; display: flex; justify-content: space-between; align-items: center; }
-        .item:hover { border-color: var(--cyan); background: rgba(0,255,255,0.05); }
-        .item.watched { border-left: 3px solid var(--red); background: rgba(255, 49, 49, 0.1); }
+        .item { background: rgba(255,255,255,0.02); border: 1px solid var(--border); padding: 10px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
+        .item.watched { border-left: 3px solid var(--red); background: rgba(255, 49, 49, 0.05); }
         
         .name-box { flex: 1; }
         .name { color: var(--cyan); font-weight: 600; font-size: 14px; text-decoration: none; }
         .details { font-size: 10px; color: #666; font-family: monospace; margin-top: 4px; }
+        
+        /* Logs de connexion */
+        .log-entry { font-size: 9px; margin-top: 5px; padding-top: 5px; border-top: 1px dashed #333; }
+        .log-in { color: #00ffaa; }
+        .log-out { color: #ff5555; }
 
-        /* Boutons Watchlist */
-        .watch-btn { background: transparent; border: 1px solid var(--cyan); color: var(--cyan); font-family: 'Orbitron'; font-size: 12px; width: 24px; height: 24px; cursor: pointer; display: flex; justify-content: center; align-items: center; transition: 0.3s; margin-left: 10px; border-radius: 2px; }
-        .watch-btn:hover { background: var(--cyan); color: black; box-shadow: 0 0 8px var(--cyan); }
+        .watch-btn { background: transparent; border: 1px solid var(--cyan); color: var(--cyan); font-family: 'Orbitron'; font-size: 12px; width: 24px; height: 24px; cursor: pointer; border-radius: 2px; }
+        .watch-btn:hover { background: var(--cyan); color: black; }
         .item.watched .watch-btn { border-color: var(--red); color: var(--red); }
-        .item.watched .watch-btn:hover { background: var(--red); color: white; }
 
-        /* Radar Section */
+        /* Radar */
         .map-wrapper { width: 100%; display: flex; justify-content: center; align-items: center; padding: 20px; box-sizing: border-box; }
         .map-frame { position: relative; width: 512px; height: 512px; border: 1px solid var(--cyan); background: #000; }
         #map-bg { width: 100%; height: 100%; position: absolute; opacity: 0.4; background-size: cover; }
         canvas { position: absolute; top: 0; left: 0; z-index: 5; pointer-events: none; }
 
-        .btn-del { color: var(--red); cursor: pointer; font-size: 12px; border: 1px solid var(--red); width: 24px; height: 24px; display: flex; justify-content: center; align-items: center; transition: 0.3s; }
-        .btn-del:hover { background: var(--red); color: white; }
+        .btn-del { color: var(--red); cursor: pointer; border: 1px solid var(--red); width: 22px; height: 22px; display: flex; justify-content: center; align-items: center; }
     </style>
 </head>
 <body onload="initApp()">
     <header>
         <div class="logo">NOX//ZETA CORE</div>
-        <div id="status" style="font-size:12px; font-family:monospace; color:var(--cyan);">SIGNAL_STABLE</div>
+        <div id="status" style="font-size:12px; font-family:monospace; color:var(--cyan);">LOGGER_ACTIVE</div>
     </header>
 
-    <div class="main-container" id="container">
-        <div class="column" style="width: 50%;">
+    <div class="main-container">
+        <div class="column" style="width: 45%;">
             <div class="col-header">TACTICAL_RADAR // <span id="reg-name">---</span></div>
             <div class="scroll-area map-wrapper">
                 <div class="map-frame">
@@ -76,42 +77,44 @@ INTERFACE_HTML = """
             </div>
         </div>
 
-        <div class="resizer" id="resizer1"></div>
+        <div class="resizer"></div>
 
         <div class="column" style="width: 25%;">
             <div class="col-header">LIVE_SCANNER [<span id="count">0</span>]</div>
             <div class="scroll-area" id="scan-list"></div>
         </div>
 
-        <div class="resizer" id="resizer2"></div>
+        <div class="resizer"></div>
 
-        <div class="column" style="width: 25%;">
-            <div class="col-header" style="color:var(--red)">PRIORITY_WATCHLIST</div>
+        <div class="column" style="width: 30%;">
+            <div class="col-header" style="color:var(--red)">PRIORITY_WATCHLIST & LOGS</div>
             <div class="scroll-area" id="watch-list"></div>
         </div>
     </div>
 
     <script>
+        // On récupère la watchlist ET l'historique des sessions
         let watchlist = JSON.parse(localStorage.getItem('nox_watchlist')) || [];
+        let sessionLogs = JSON.parse(localStorage.getItem('nox_logs')) || {}; 
+        let lastSeenState = {}; // Pour comparer qui est parti/arrivé
 
         function initResize() {
             const resizers = document.querySelectorAll('.resizer');
             resizers.forEach(resizer => {
-                resizer.addEventListener('mousedown', function(e) {
-                    e.preventDefault();
-                    window.addEventListener('mousemove', resize);
-                    window.addEventListener('mouseup', stopResize);
+                resizer.addEventListener('mousedown', (e) => {
                     let prevCol = resizer.previousElementSibling;
                     let nextCol = resizer.nextElementSibling;
                     let startX = e.pageX;
-                    let startWidthPrev = prevCol.offsetWidth;
-                    let startWidthNext = nextCol.offsetWidth;
-                    function resize(e) {
+                    let startW = prevCol.offsetWidth;
+                    let startWNext = nextCol.offsetWidth;
+                    const onMouseMove = (e) => {
                         let diff = e.pageX - startX;
-                        prevCol.style.width = (startWidthPrev + diff) + 'px';
-                        nextCol.style.width = (startWidthNext - diff) + 'px';
-                    }
-                    function stopResize() { window.removeEventListener('mousemove', resize); }
+                        prevCol.style.width = (startW + diff) + 'px';
+                        nextCol.style.width = (startWNext - diff) + 'px';
+                    };
+                    const onMouseUp = () => { window.removeEventListener('mousemove', onMouseMove); };
+                    window.addEventListener('mousemove', onMouseMove);
+                    window.addEventListener('mouseup', onMouseUp);
                 });
             });
         }
@@ -119,61 +122,79 @@ INTERFACE_HTML = """
         function toggleWatch(name) {
             if (watchlist.includes(name)) {
                 watchlist = watchlist.filter(n => n !== name);
+                delete sessionLogs[name];
             } else {
                 watchlist.push(name);
+                sessionLogs[name] = { lastStatus: false, login: '---', logout: '---' };
             }
-            localStorage.setItem('nox_watchlist', JSON.stringify(watchlist));
+            save();
             updateUI();
+        }
+
+        function save() {
+            localStorage.setItem('nox_watchlist', JSON.stringify(watchlist));
+            localStorage.setItem('nox_logs', JSON.stringify(sessionLogs));
         }
 
         async function updateUI() {
             try {
                 const res = await fetch('/api_data');
                 const data = await res.json();
-                
+                const now = new Date().toLocaleTimeString('fr-FR', {hour: '2-digit', minute:'2-digit', second:'2-digit'});
+
                 document.getElementById('reg-name').innerText = data.region.toUpperCase();
                 document.getElementById('count').innerText = data.avatars.length;
-                
-                if(data.coords) {
-                    document.getElementById('map-bg').style.backgroundImage = `url('https://map.secondlife.com/map-1-${data.coords.x}-${data.coords.y}-objects.jpg')`;
-                }
+                if(data.coords) document.getElementById('map-bg').style.backgroundImage = `url('https://map.secondlife.com/map-1-${data.coords.x}-${data.coords.y}-objects.jpg')`;
 
-                // Scanner
-                const scanArea = document.getElementById('scan-list');
-                scanArea.innerHTML = data.avatars.map(av => {
+                // Logique de détection Arrivée / Départ pour la Watchlist
+                watchlist.forEach(name => {
+                    const isPresent = data.avatars.find(a => a.name === name);
+                    if (!sessionLogs[name]) sessionLogs[name] = { login: '---', logout: '---', lastStatus: false };
+
+                    // Détection CONNEXION
+                    if (isPresent && !sessionLogs[name].lastStatus) {
+                        sessionLogs[name].login = now;
+                        sessionLogs[name].lastStatus = true;
+                        save();
+                    }
+                    // Détection DÉCONNEXION
+                    if (!isPresent && sessionLogs[name].lastStatus) {
+                        sessionLogs[name].logout = now;
+                        sessionLogs[name].lastStatus = false;
+                        save();
+                    }
+                });
+
+                // Rendu Scanner
+                document.getElementById('scan-list').innerHTML = data.avatars.map(av => {
                     const isWatched = watchlist.includes(av.name);
-                    return `
-                        <div class="item ${isWatched ? 'watched' : ''}">
-                            <div class="name-box">
-                                <span class="name">${isWatched ? '⚠️ ' : ''}${av.name}</span>
-                                <div class="details">POS: ${Math.round(av.x)}, ${Math.round(av.y)}</div>
-                            </div>
-                            <button class="watch-btn" onclick="toggleWatch('${av.name}')">${isWatched ? '-' : '+'}</button>
-                        </div>
-                    `;
+                    return `<div class="item ${isWatched ? 'watched' : ''}">
+                        <div class="name-box"><span class="name">${av.name}</span><div class="details">POS: ${Math.round(av.x)}, ${Math.round(av.y)}</div></div>
+                        <button class="watch-btn" onclick="toggleWatch('${av.name}')">${isWatched ? '-' : '+'}</button>
+                    </div>`;
                 }).join('');
 
-                // Watchlist
-                const watchArea = document.getElementById('watch-list');
-                watchArea.innerHTML = watchlist.map(name => `
-                    <div class="item watched">
+                // Rendu Watchlist avec Logs
+                document.getElementById('watch-list').innerHTML = watchlist.map(name => {
+                    const log = sessionLogs[name] || {login:'---', logout:'---', lastStatus:false};
+                    return `<div class="item watched">
                         <div class="name-box">
                             <a href="https://my.secondlife.com/${name.replace(/ /g, '.')}" target="_blank" class="name">${name}</a>
-                            <div class="details">STATUS: ${data.avatars.find(a => a.name === name) ? 'ONLINE' : 'OFFLINE'}</div>
+                            <div class="log-entry">
+                                <span class="log-in">▲ IN: ${log.login}</span><br>
+                                <span class="log-out">▼ OUT: ${log.logout}</span>
+                            </div>
                         </div>
                         <div class="btn-del" onclick="toggleWatch('${name}')">✖</div>
-                    </div>
-                `).join('');
+                    </div>`;
+                }).join('');
 
                 // Radar
                 const ctx = document.getElementById('radar-canvas').getContext('2d');
                 ctx.clearRect(0, 0, 512, 512);
                 data.avatars.forEach(av => {
-                    const isWatched = watchlist.includes(av.name);
-                    ctx.fillStyle = isWatched ? "#ff3131" : "#00ffff";
-                    ctx.beginPath();
-                    ctx.arc(av.x * 2, 512 - (av.y * 2), isWatched ? 8 : 4, 0, Math.PI * 2);
-                    ctx.fill();
+                    ctx.fillStyle = watchlist.includes(av.name) ? "#ff3131" : "#00ffff";
+                    ctx.beginPath(); ctx.arc(av.x * 2, 512 - (av.y * 2), watchlist.includes(av.name) ? 8 : 4, 0, Math.PI * 2); ctx.fill();
                 });
             } catch(e) {}
         }
