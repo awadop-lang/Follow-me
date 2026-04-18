@@ -2,20 +2,21 @@ from flask import Flask, request, jsonify, render_template_string, session, redi
 import time
 
 app = Flask(__name__)
-app.secret_key = "NOX_ZETA_SYNC_169"
+app.secret_key = "NOX_ZETA_V170_FINAL"
 
-# Base de données temporaire
+# Base de données volatile (se réinitialise au déploiement)
 db = {
     "admin": {
         "pw": "1234",
         "region": "Initialisation...",
         "coords": {"x": 0, "y": 0},
         "avatars": [],
-        "watchlist": [] # {"name":str, "uuid":str, "online_sl":bool, "last_ping":float}
+        "watchlist": [] # [{"name":str, "uuid":str, "online_sl":bool, "last_ping":float}]
     }
 }
 
-INTERFACE_HTML = """
+# --- HTML INTERFACE ---
+HTML = """
 <!DOCTYPE html>
 <html>
 <head>
@@ -43,8 +44,8 @@ INTERFACE_HTML = """
 </head>
 <body onload="setInterval(updateUI, 2000)">
     <header>
-        <div style="font-family:'Orbitron'; color:var(--cyan)">NOX//ZETA v1.6.9</div>
-        <div style="font-size:12px; color:var(--green)">REGION: <span id="reg-name">---</span></div>
+        <div style="font-family:'Orbitron'; color:var(--cyan)">NOX//ZETA v1.7.0</div>
+        <div style="font-size:12px; color:var(--green)">ZONE: <span id="reg-name">---</span></div>
         <a href="/logout" style="color:var(--red); text-decoration:none; font-size:11px;">[ LOGOUT ]</a>
     </header>
 
@@ -53,11 +54,11 @@ INTERFACE_HTML = """
             <div class="map-frame"><div id="map-bg"></div><canvas id="radar-canvas" width="512" height="512"></canvas></div>
         </div>
         <div class="column" style="width: 27%;">
-            <div class="col-header">Radar Local</div>
+            <div class="col-header">Proximité</div>
             <div id="scan-list" class="scroll-area"></div>
         </div>
         <div class="column" style="width: 28%;">
-            <div class="col-header" style="color:var(--red)">Watchlist Global</div>
+            <div class="col-header" style="color:var(--red)">Suivi Global (Persistent)</div>
             <div id="watch-list" class="scroll-area"></div>
         </div>
     </div>
@@ -69,9 +70,9 @@ INTERFACE_HTML = """
                 const data = await res.json();
                 if (!data.watchlist) return;
 
-                document.getElementById('reg-name').innerText = data.region || "OFFLINE";
+                document.getElementById('reg-name').innerText = data.region || "DISCONNECTED";
                 if(data.coords && data.coords.x > 0) {
-                    const t = Math.floor(Date.now() / 60000);
+                    const t = Math.floor(Date.now() / 30000); // Rafraîchit l'image si besoin
                     document.getElementById('map-bg').style.backgroundImage = `url('https://map.secondlife.com/map-1-${data.coords.x}-${data.coords.y}-objects.jpg?t=${t}')`;
                 }
 
@@ -84,97 +85,12 @@ INTERFACE_HTML = """
                 document.getElementById('watch-list').innerHTML = data.watchlist.map(w => {
                     const isLocal = data.avatars.find(a => a.uuid === w.uuid);
                     const now = Math.floor(Date.now() / 1000);
-                    // On garde l'agent ONLINE si ping < 45s (couvre les changements de sim)
+                    // L'agent reste ONLINE si le dernier ping date de moins de 45s
                     const isOnlineGrid = w.online_sl && (now - w.last_ping < 45);
                     
-                    let stC = "st-off", stT = "OFFLINE";
-                    if (isLocal) { stC = "st-local"; stT = "LOCAL"; }
-                    else if (isOnlineGrid) { stC = "st-grid"; stT = "GRID ONLINE"; }
+                    let stC = "st-off", stT = "HORS-LIGNE";
+                    if (isLocal) { stC = "st-local"; stT = "SUR PLACE"; }
+                    else if (isOnlineGrid) { stC = "st-grid"; stT = "DANS LA GRID"; }
 
-                    return `<div class="item" style="border-left: 3px solid ${isLocal?'var(--green)':'var(--red)'}">
-                        <button class="action-btn" onclick="toggleWatch('${w.name}', '${w.uuid}')" style="border-color:var(--red);color:var(--red)">&times;</button>
-                        <span class="name">${w.name}</span><br>
-                        <span class="status-badge ${stC}">${stT}</span>
-                    </div>`;
-                }).join('');
-
-                const ctx = document.getElementById('radar-canvas').getContext('2d');
-                ctx.clearRect(0, 0, 512, 512);
-                data.avatars.forEach(av => {
-                    ctx.fillStyle = data.watchlist.some(w => w.uuid === av.uuid) ? "#ff3131" : "#00ffff";
-                    ctx.beginPath(); ctx.arc(av.x * 2, 512 - (av.y * 2), 7, 0, Math.PI * 2); ctx.fill();
-                });
-            } catch (e) {}
-        }
-
-        async function toggleWatch(name, uuid) {
-            await fetch('/toggle_watch', {
-                method:'POST',
-                headers:{'Content-Type':'application/json'},
-                body:JSON.stringify({name: name, uuid: uuid})
-            });
-            updateUI();
-        }
-    </script>
-</body>
-</html>
-"""
-
-@app.route('/')
-def index():
-    if 'user' not in session: return redirect(url_for('login'))
-    return render_template_string(INTERFACE_HTML, user_name=session['user'])
-
-@app.route('/update_radar', methods=['POST'])
-def update_radar():
-    data = request.get_json(silent=True) or {}
-    user = data.get("operator_id", "admin").lower()
-    if user in db:
-        db[user].update({
-            'avatars': data.get('avatars', []),
-            'region': data.get('region', 'Unknown'),
-            'coords': data.get('grid_coords', {"x":0, "y":0})
-        })
-        return "OK", 200
-    return "Error", 404
-
-@app.route('/update_global_status', methods=['POST'])
-def update_global():
-    data = request.get_json(silent=True) or {}
-    uuid, status = data.get('uuid'), data.get('status') == "1"
-    for u in db:
-        for agent in db[u]['watchlist']:
-            if agent.get('uuid') == uuid:
-                agent['online_sl'] = status
-                agent['last_ping'] = time.time()
-    return "OK", 200
-
-@app.route('/get_watchlist_uuids')
-def get_watchlist_uuids():
-    op = request.args.get('operator_id', 'admin').lower()
-    return jsonify([a['uuid'] for a in db[op]['watchlist'] if a.get('uuid')])
-
-@app.route('/api_data')
-def api_data():
-    return jsonify(db.get(session.get('user', 'admin'), {}))
-
-@app.route('/toggle_watch', methods=['POST'])
-def toggle_watch():
-    u = session.get('user', 'admin')
-    data = request.get_json()
-    name, uuid = data.get('name'), data.get('uuid')
-    wl = db[u]['watchlist']
-    exists = next((i for i in wl if i["uuid"] == uuid), None)
-    if exists: wl.remove(exists)
-    else: wl.append({"name": name, "uuid": uuid, "online_sl": True, "last_ping": time.time()})
-    return jsonify({"status": "ok"})
-
-@app.route('/login', methods=['GET', 'POST'])
-def login():
-    if request.method == 'POST':
-        u = request.form.get('u', '').lower()
-        if u in db: session['user'] = u; return redirect(url_for('index'))
-    return '<body style="background:#000;color:#0ff;display:flex;justify-content:center;align-items:center;height:100vh;"><form method="POST">USER: <input name="u"><button>IN</button></form></body>'
-
-@app.route('/logout')
-def logout(): session.clear(); return redirect(url_for('login'))
+                    return `<div class="item" style="border-left: 4px solid ${isLocal?'var(--green)':'var(--red)'}">
+                        <button class="action-btn" onclick="
