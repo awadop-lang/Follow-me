@@ -10,6 +10,7 @@ db = {
 }
 times = {}
 
+# --- INTERFACE TACTIQUE NOX V5.9 (FINAL PROFILE FIX) ---
 HTML_CODE = """
 <!DOCTYPE html>
 <html lang="fr">
@@ -29,13 +30,13 @@ HTML_CODE = """
         
         .list { background: var(--panel); border: 1px solid #111; padding: 10px; overflow-y: auto; border-left: 2px solid var(--p); }
         .card { background: rgba(255,255,255,0.01); border: 1px solid #1a1a1a; padding: 12px; margin-bottom: 8px; cursor: pointer; transition: 0.2s; }
-        .card:hover { background: rgba(0,255,255,0.1); border-color: var(--p); }
+        .card:hover { background: rgba(0,255,255,0.1); border-color: var(--p); transform: translateX(5px); }
 
         .inspector { background: #000; border: 1px solid #222; display: flex; flex-direction: column; border-top: 2px solid var(--p); }
         .inspect-header { padding: 10px; font-size: 10px; color: var(--p); background: rgba(0,255,255,0.05); text-align: center; letter-spacing: 2px; }
         
         .inspect-photo-area { width: 100%; aspect-ratio: 1; background: #0a0a0a; border-bottom: 1px solid #222; display: flex; align-items: center; justify-content: center; position: relative; }
-        #i-img { width: 100%; height: 100%; object-fit: cover; z-index: 2; position: absolute; top:0; left:0; border: 0; }
+        #i-img { width: 100%; height: 100%; object-fit: cover; z-index: 2; position: absolute; top:0; left:0; border: 0; display: none; }
         .placeholder { font-size: 10px; opacity: 0.3; text-align: center; z-index: 1; }
 
         .inspect-details { padding: 15px; flex: 1; overflow-y: auto; }
@@ -43,13 +44,13 @@ HTML_CODE = """
         .val { font-size: 13px; color: #fff; font-weight: bold; margin-bottom: 4px; }
 
         .btn { width: 100%; padding: 12px; background: var(--p); color: #000; border: none; font-family: inherit; font-weight: bold; cursor: pointer; margin-top: 20px; text-transform: uppercase; }
-        .btn:hover { background: #fff; }
+        .btn:hover { background: #fff; box-shadow: 0 0 10px var(--p); }
     </style>
 </head>
 <body>
     <header>
         <div style="font-size: 16px; font-weight: bold; letter-spacing: 4px; color: var(--p);">[ TACTICAL_HUD_V5.9 ]</div>
-        <div id="sim-info" style="font-size: 10px;">SIGNAL_ACTIVE</div>
+        <div id="sim-info" style="font-size: 10px;">SIGNAL_STABLE</div>
     </header>
 
     <div class="grid">
@@ -58,15 +59,15 @@ HTML_CODE = """
         <div class="inspector">
             <div class="inspect-header">// TARGET_INVESTIGATION</div>
             <div class="inspect-photo-area">
-                <img id="i-img" src="" style="display:none;" onerror="this.style.display='none'">
-                <div class="placeholder">CHARGEMENT IMAGE...<br><span style="font-size:8px;">(Si profil public)</span></div>
+                <img id="i-img" src="" onload="this.style.display='block'" onerror="this.style.display='none'">
+                <div class="placeholder">IMAGE_UNAVAILABLE<br><span style="font-size:8px;">PRIVATE PROFILE</span></div>
             </div>
             <div class="inspect-details">
-                <div class="label">Agent</div><div id="i-name" class="val">---</div>
-                <div class="label">Temps de présence</div><div id="i-time" class="val" style="color: var(--p);">00m 00s</div>
-                <div class="label">Position</div><div id="i-pos" class="val">---</div>
+                <div class="label">Agent Identity</div><div id="i-name" class="val">---</div>
+                <div class="label">Duration</div><div id="i-time" class="val" style="color: var(--p);">00m 00s</div>
+                <div class="label">Coordinates</div><div id="i-pos" class="val">---</div>
                 <div class="label">UUID</div><div id="i-key" class="val" style="font-size:10px; color:#444;">---</div>
-                <button id="i-btn" class="btn" style="display:none;">Profil Web</button>
+                <button id="i-btn" class="btn" style="display:none;">Open Full Profile</button>
             </div>
         </div>
     </div>
@@ -89,7 +90,7 @@ HTML_CODE = """
             const btn = document.getElementById('i-btn');
             
             img.style.display = 'none';
-            // Tentative d'URL alternative pour l'image
+            // Tentative 1: Service S3 (Le plus fréquent pour les thumbnails)
             img.src = `https://my-secondlife-p01.s3.amazonaws.com/users/${av.key.replace(/-/g, '_')}/thumb_sl_image.png`;
             
             document.getElementById('i-name').innerText = av.name.toUpperCase();
@@ -97,13 +98,10 @@ HTML_CODE = """
             
             btn.style.display = 'block';
             
-            // CORRECTIF URL PROFIL: 
-            // On remplace les espaces par des points et on met tout en minuscule pour l'URL
-            const profileName = av.name.toLowerCase().replace(/ /g, '.');
-            btn.onclick = () => window.open(`https://my.secondlife.com/${profileName}`, '_blank');
-            
-            // On peut aussi essayer l'URL world.secondlife qui est plus ancienne mais robuste
-            // btn.onclick = () => window.open(`https://world.secondlife.com/resident/${av.key}`, '_blank');
+            // --- FIX URL PROFIL ---
+            // On convertit "John Doe" en "john.doe"
+            const urlName = av.name.toLowerCase().replace(/ /g, '.');
+            btn.onclick = () => window.open(`https://my.secondlife.com/${urlName}`, '_blank');
         }
 
         async function update() {
@@ -130,7 +128,8 @@ HTML_CODE = """
                     if(!trails[av.key]) trails[av.key] = [];
                     let lp = trails[av.key][trails[av.key].length - 1];
                     if(!lp || Math.abs(lp.x - x) > 1 || Math.abs(lp.y - y) > 1) trails[av.key].push({x, y});
-                    
+                    if(trails[av.key].length > 500) trails[av.key].shift();
+
                     ctx.beginPath(); ctx.strokeStyle = color; ctx.globalAlpha = 0.4; ctx.lineWidth = 1;
                     trails[av.key].forEach((p, idx) => { if(idx==0) ctx.moveTo(p.x,p.y); else ctx.lineTo(p.x,p.y); });
                     ctx.stroke(); ctx.globalAlpha = 1.0;
@@ -141,7 +140,7 @@ HTML_CODE = """
                     const card = document.createElement('div');
                     card.className = "card";
                     card.onclick = () => showProfile(av);
-                    card.innerHTML = `<b style="color:${color}">${av.name}</b><br><span style="font-size:9px; opacity:0.5;">DURÉE: ${fmtTime(duration)}</span>`;
+                    card.innerHTML = `<b style="color:${color}">${av.name}</b><br><span style="font-size:9px; opacity:0.5;">DURATION: ${fmtTime(duration)}</span>`;
                     feed.appendChild(card);
                 });
             } catch(e){}
