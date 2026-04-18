@@ -1,124 +1,97 @@
 from flask import Flask, request, jsonify, render_template_string, session, redirect, url_for
+from datetime import datetime
 import time
 
 app = Flask(__name__)
-app.secret_key = "NOX_SYNC_FIX_171"
+app.secret_key = "NOX_ZETA_RENDER_2026"
 
-db = {
+# Base de données volatile
+users_db = {
     "admin": {
-        "region": "Initialisation...",
-        "coords": {"x": 0, "y": 0},
+        "pw": "1234", 
+        "region": "Initialisation...", 
+        "coords": {"x":0, "y":0}, 
         "avatars": [],
-        "watchlist": [] 
+        "history": {},
+        "watchlist": [] # [{"name":str, "uuid":str, "online_sl":bool, "last_ping":float}]
     }
 }
 
-HTML_UI = """
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <style>
-        body { background: #020205; color: #0ff; font-family: sans-serif; margin: 0; padding: 20px; }
-        .grid { display: grid; grid-template-columns: 1fr 300px; gap: 20px; }
-        .map-box { width: 512px; height: 512px; border: 1px solid #0ff; position: relative; background: #000; }
-        #map-img { width: 100%; height: 100%; opacity: 0.5; }
-        .item { border: 1px solid rgba(0,255,255,0.3); padding: 10px; margin-bottom: 5px; }
-        .st-local { color: #0f0; } .st-grid { color: #ff0; } .st-off { color: #777; }
-        button { cursor: pointer; background: none; border: 1px solid #0ff; color: #0ff; }
-    </style>
-</head>
-<body onload="setInterval(refresh, 2000)">
-    <h2>NOX//ZETA v1.7.1 - <span id="reg-name">---</span></h2>
-    <div class="grid">
-        <div class="map-box">
-            <div id="map-img" style="background-size: cover;"></div>
-        </div>
-        <div>
-            <h3>WATCHLIST</h3>
-            <div id="w-list"></div>
-            <hr>
-            <h3>RADAR</h3>
-            <div id="r-list"></div>
-        </div>
-    </div>
-
-    <script>
-        async function refresh() {
-            const r = await fetch('/api_data');
-            const d = await r.json();
-            if(!d.watchlist) return;
-
-            document.getElementById('reg-name').innerText = d.region;
-            if(d.coords.x > 0) {
-                document.getElementById('map-img').style.backgroundImage = `url('https://map.secondlife.com/map-1-${d.coords.x}-${d.coords.y}-objects.jpg')`;
-            }
-
-            document.getElementById('r-list').innerHTML = d.avatars.map(a => `
-                <div class="item">${a.name} <button onclick="add('${a.name}','${a.uuid}')">+</button></div>
-            `).join('');
-
-            document.getElementById('w-list').innerHTML = d.watchlist.map(w => {
-                const local = d.avatars.find(a => a.uuid === w.uuid);
-                const online = w.online_sl && (Date.now()/1000 - w.last_ping < 45);
-                let cls = "st-off", txt = "OFFLINE";
-                if(local) { cls="st-local"; txt="SUR PLACE"; }
-                else if(online) { cls="st-grid"; txt="DANS LA GRID"; }
-                
-                return `<div class="item ${cls}">${w.name} [${txt}] <button onclick="add('${w.name}','${w.uuid}')">x</button></div>`;
-            }).join('');
-        }
-        async function add(n, u) { 
-            await fetch('/toggle', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name:n, uuid:u})});
-            refresh();
-        }
-    </script>
-</body>
-</html>
-"""
+# --- Copie ici le bloc INTERFACE_HTML (le design cyberpunk que tu as validé) ---
+# (Je raccourcis ici pour la lisibilité, garde bien tout le HTML/CSS précédent)
+INTERFACE_HTML = """...""" 
 
 @app.route('/')
-def home():
-    if 'u' not in session: return redirect('/login')
-    return render_template_string(HTML_UI)
+def index():
+    if 'user' not in session: return redirect(url_for('login'))
+    return render_template_string(INTERFACE_HTML)
 
-@app.route('/up_radar', methods=['POST'])
-def up_radar():
-    data = request.get_json()
-    op = data.get("op", "admin")
-    db[op].update({'avatars':data['avs'], 'region':data['reg'], 'coords':data['pos']})
-    return "OK"
+@app.route('/update_radar', methods=['POST'])
+def update_radar():
+    data = request.get_json(silent=True) or {}
+    user = data.get("op", "admin").lower()
+    if user in users_db:
+        now = datetime.now().strftime("%H:%M:%S")
+        new_avs = data.get('avs', [])
+        names = [a['name'] for a in new_avs]
+        hist = users_db[user]["history"]
+        
+        # Logique In/Out
+        for n in names:
+            if n not in hist or not hist[n].get('active'):
+                hist[n] = {'in': now, 'out': '--:--:--', 'active': True}
+        for n, s in hist.items():
+            if s.get('active') and n not in names:
+                s['out'] = now; s['active'] = False
+                
+        users_db[user].update({
+            'region': data.get('reg'),
+            'coords': data.get('pos'),
+            'avatars': new_avs
+        })
+        return "OK", 200
+    return "ERR", 404
 
-@app.route('/up_glob', methods=['POST'])
-def up_glob():
-    data = request.get_json()
-    for agent in db['admin']['watchlist']:
-        if agent['uuid'] == data['uuid']:
-            agent['online_sl'] = (data['status'] == "1")
-            agent['last_ping'] = time.time()
-    return "OK"
+@app.route('/update_global', methods=['POST'])
+def update_global():
+    data = request.get_json(silent=True) or {}
+    uuid, status = data.get('uuid'), data.get('status') == "1"
+    for u in users_db:
+        for agent in users_db[u]['watchlist']:
+            if agent.get('uuid') == uuid:
+                agent['online_sl'] = status
+                agent['last_ping'] = time.time()
+    return "OK", 200
 
-@app.route('/get_wl')
-def get_wl():
-    return jsonify([a['uuid'] for a in db['admin']['watchlist']])
+@app.route('/get_watchlist')
+def get_watchlist():
+    op = request.args.get('op', 'admin').lower()
+    return jsonify([a['uuid'] for a in users_db[op]['watchlist']])
 
 @app.route('/api_data')
 def api_data():
-    return jsonify(db['admin'])
+    user = session.get('user', 'admin')
+    return jsonify(users_db.get(user, {}))
 
-@app.route('/toggle', methods=['POST'])
-def toggle():
-    d = request.get_json()
-    wl = db['admin']['watchlist']
-    exists = next((i for i in wl if i["uuid"] == d['uuid']), None)
+@app.route('/toggle_watch', methods=['POST'])
+def toggle_watch():
+    u = session.get('user', 'admin')
+    data = request.get_json()
+    name, uuid = data.get('name'), data.get('uuid')
+    wl = users_db[u]['watchlist']
+    exists = next((i for i in wl if i["uuid"] == uuid), None)
     if exists: wl.remove(exists)
-    else: wl.append({"name":d['name'], "uuid":d['uuid'], "online_sl":True, "last_ping":time.time()})
-    return "OK"
+    else: wl.append({"name": name, "uuid": uuid, "online_sl": True, "last_ping": time.time()})
+    return jsonify({"status": "ok"})
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    if request.method == 'POST': session['u'] = "admin"; return redirect('/')
-    return '<form method="POST"><input name="u"><button>IN</button></form>'
+    if request.method == 'POST':
+        u, p = request.form.get('u', '').lower(), request.form.get('p', '')
+        if u in users_db and users_db[u]['pw'] == p:
+            session['user'] = u
+            return redirect(url_for('index'))
+    return '<form method="POST">USER: <input name="u"> PASS: <input type="password" name="p"><button>IN</button></form>'
 
-@app.route('/logout')
-def logout(): session.clear(); return redirect('/')
+if __name__ == "__main__":
+    app.run(host='0.0.0.0', port=10000)
