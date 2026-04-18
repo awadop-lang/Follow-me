@@ -15,7 +15,7 @@ HTML_CODE = """
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <title>TACTICAL_HUD // NOX_V5.8</title>
+    <title>TACTICAL_HUD // NOX_V5.9</title>
     <style>
         :root { --p: #00ffff; --bg: #010103; --panel: #05050a; --font: 'Fira Code', monospace; }
         body { background: var(--bg); color: #a0c0c0; font-family: var(--font); margin: 0; padding: 15px; height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
@@ -43,11 +43,12 @@ HTML_CODE = """
         .val { font-size: 13px; color: #fff; font-weight: bold; margin-bottom: 4px; }
 
         .btn { width: 100%; padding: 12px; background: var(--p); color: #000; border: none; font-family: inherit; font-weight: bold; cursor: pointer; margin-top: 20px; text-transform: uppercase; }
+        .btn:hover { background: #fff; }
     </style>
 </head>
 <body>
     <header>
-        <div style="font-size: 16px; font-weight: bold; letter-spacing: 4px; color: var(--p);">[ TACTICAL_HUD_V5.8 ]</div>
+        <div style="font-size: 16px; font-weight: bold; letter-spacing: 4px; color: var(--p);">[ TACTICAL_HUD_V5.9 ]</div>
         <div id="sim-info" style="font-size: 10px;">SIGNAL_ACTIVE</div>
     </header>
 
@@ -57,8 +58,8 @@ HTML_CODE = """
         <div class="inspector">
             <div class="inspect-header">// TARGET_INVESTIGATION</div>
             <div class="inspect-photo-area">
-                <img id="i-img" src="" style="display:none;" onload="this.style.display='block'">
-                <div class="placeholder">CHARGEMENT PHOTO...<br><span style="font-size:8px;">(Si disponible publiquement)</span></div>
+                <img id="i-img" src="" style="display:none;" onerror="this.style.display='none'">
+                <div class="placeholder">CHARGEMENT IMAGE...<br><span style="font-size:8px;">(Si profil public)</span></div>
             </div>
             <div class="inspect-details">
                 <div class="label">Agent</div><div id="i-name" class="val">---</div>
@@ -88,13 +89,21 @@ HTML_CODE = """
             const btn = document.getElementById('i-btn');
             
             img.style.display = 'none';
-            // Tentative 1: via le service d'avatar (plus fiable pour le web)
-            img.src = `https://id-service.secondlife.com/avatars/${av.key}/profile_image.png`;
+            // Tentative d'URL alternative pour l'image
+            img.src = `https://my-secondlife-p01.s3.amazonaws.com/users/${av.key.replace(/-/g, '_')}/thumb_sl_image.png`;
             
             document.getElementById('i-name').innerText = av.name.toUpperCase();
             document.getElementById('i-key').innerText = av.key;
+            
             btn.style.display = 'block';
-            btn.onclick = () => window.open(`https://my.secondlife.com/${av.name.replace(/ /g, '.')}`, '_blank');
+            
+            // CORRECTIF URL PROFIL: 
+            // On remplace les espaces par des points et on met tout en minuscule pour l'URL
+            const profileName = av.name.toLowerCase().replace(/ /g, '.');
+            btn.onclick = () => window.open(`https://my.secondlife.com/${profileName}`, '_blank');
+            
+            // On peut aussi essayer l'URL world.secondlife qui est plus ancienne mais robuste
+            // btn.onclick = () => window.open(`https://world.secondlife.com/resident/${av.key}`, '_blank');
         }
 
         async function update() {
@@ -121,8 +130,7 @@ HTML_CODE = """
                     if(!trails[av.key]) trails[av.key] = [];
                     let lp = trails[av.key][trails[av.key].length - 1];
                     if(!lp || Math.abs(lp.x - x) > 1 || Math.abs(lp.y - y) > 1) trails[av.key].push({x, y});
-                    if(trails[av.key].length > 400) trails[av.key].shift();
-
+                    
                     ctx.beginPath(); ctx.strokeStyle = color; ctx.globalAlpha = 0.4; ctx.lineWidth = 1;
                     trails[av.key].forEach((p, idx) => { if(idx==0) ctx.moveTo(p.x,p.y); else ctx.lineTo(p.x,p.y); });
                     ctx.stroke(); ctx.globalAlpha = 1.0;
@@ -142,28 +150,3 @@ HTML_CODE = """
     </script>
 </body>
 </html>
-"""
-
-@app.route('/api', methods=['GET', 'POST'])
-def handle():
-    global db, times
-    if request.method == 'POST':
-        try:
-            data = request.json
-            db["region"] = data.get("region", "UNK")
-            db["coords"] = data.get("grid_coords", {"x":0, "y":0})
-            active = []
-            now = time.time()
-            for av in data.get("avatars", []):
-                uid = av.get("key")
-                if uid:
-                    if uid not in times: times[uid] = now
-                    av["start_time"] = times[uid]
-                    active.append(av)
-            db["avatars"] = active
-            return "OK", 200
-        except: return "ERR", 500
-    return jsonify(db)
-
-@app.route('/')
-def home(): return render_template_string(HTML_CODE)
