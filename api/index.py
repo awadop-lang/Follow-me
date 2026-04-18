@@ -1,19 +1,21 @@
 from flask import Flask, request, jsonify, render_template_string
 import time
+from datetime import datetime
 import urllib.request
 
 app = Flask(__name__)
 
+# Stockage des données
 db = {"region": "UPLINK_STABLE", "coords": {"x": 0, "y": 0}, "avatars": []}
 times = {}      
-watchlist = {} 
+watchlist = {} # {uuid: {"name": str, "online": bool, "arr": str, "dep": str}}
 
 HTML_CODE = """
 <!DOCTYPE html>
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <title>NOX_TACTICAL_V7.3</title>
+    <title>NOX_TACTICAL_V7.4</title>
     <style>
         :root { --p: #00ffff; --bg: #010103; --panel: #05050a; --font: 'Fira Code', monospace; }
         body { background: var(--bg); color: #a0c0c0; font-family: var(--font); margin: 0; padding: 15px; height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
@@ -29,20 +31,19 @@ HTML_CODE = """
         .card.selected { border-left: 4px solid var(--p); background: rgba(0,255,255,0.1); }
         .quick-add { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: #ff00ff; color: #000; border: none; padding: 2px 8px; font-weight: bold; font-size: 10px; cursor: pointer; border-radius: 2px; }
         .watchlist-panel { grid-column: 1; grid-row: 2; background: #05080a; border: 1px solid #1a2025; border-top: 2px solid #ff00ff; padding: 10px; display: flex; flex-direction: column; }
-        .w-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+        .w-table { width: 100%; border-collapse: collapse; font-size: 10px; }
         .w-table th { text-align: left; color: #ff00ff; border-bottom: 1px solid #222; padding: 5px; font-size: 9px; }
-        .w-table td { padding: 5px; border-bottom: 1px solid #111; }
+        .w-table td { padding: 5px; border-bottom: 1px solid #111; white-space: nowrap; }
         .del-btn { color: #ff4444; cursor: pointer; border: 1px solid #411; padding: 1px 6px; font-size: 10px; }
         .inspector { background: #000; border: 1px solid #222; padding: 15px; min-height: 120px; border-top: 2px solid var(--p); display: flex; }
         #i-img { width: 90px; height: 90px; border: 1px solid #333; margin-right: 15px; }
-        ::-webkit-scrollbar { width: 3px; }
-        ::-webkit-scrollbar-thumb { background: var(--p); }
+        .timer-badge { color: var(--p); font-size: 10px; background: rgba(0,255,255,0.1); padding: 2px 5px; border-radius: 3px; }
     </style>
 </head>
 <body>
     <header>
-        <div style="font-size: 16px; font-weight: bold; letter-spacing: 4px; color: var(--p);">[ TACTICAL_MONITOR_V7.3 ]</div>
-        <div id="sim-status" style="font-size: 10px; opacity: 0.5;">UPLINK_ACTIVE</div>
+        <div style="font-size: 16px; font-weight: bold; letter-spacing: 4px; color: var(--p);">[ NOX_LOGGER_V7.4 ]</div>
+        <div id="sim-status" style="font-size: 10px; opacity: 0.5;">UPLINK_STABLE</div>
     </header>
 
     <div class="grid">
@@ -57,20 +58,27 @@ HTML_CODE = """
                         <button id="i-btn" style="padding:5px 20px; background:var(--p); border:none; cursor:pointer; font-weight:bold; font-size:11px; color:#000;">PROFILE</button>
                     </div>
                 </div>
-                <div id="inspect-none" style="text-align:center; width:100%; opacity:0.2; font-size:10px; margin-top:35px;">READY</div>
+                <div id="inspect-none" style="text-align:center; width:100%; opacity:0.2; font-size:10px; margin-top:35px;">MONITORING_ACTIVE</div>
             </div>
             <div class="list" id="feed"></div>
         </div>
 
         <div class="watchlist-panel">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                <div style="font-size:10px; color:#ff00ff; font-weight:bold;">// GLOBAL_WATCHLIST</div>
+                <div style="font-size:10px; color:#ff00ff; font-weight:bold;">// LOGS_WATCHLIST</div>
                 <div>
-                    <input type="text" id="watch-uuid" placeholder="UUID Avatar...">
-                    <button class="add-btn" onclick="addWatchManual()">ADD</button>
+                    <input type="text" id="watch-uuid" style="background:#000; border:1px solid #333; color:var(--p); padding:3px; font-size:10px;" placeholder="UUID...">
+                    <button onclick="addWatchManual()" style="background:#ff00ff; border:none; padding:3px 10px; font-size:10px; cursor:pointer;">ADD</button>
                 </div>
             </div>
-            <div style="overflow-y:auto; flex:1;"><table class="w-table"><thead><tr><th>AGENT</th><th>STATUS</th><th>ACTION</th></tr></thead><tbody id="watch-list-body"></tbody></table></div>
+            <div style="overflow-y:auto; flex:1;">
+                <table class="w-table">
+                    <thead>
+                        <tr><th>AGENT</th><th>STATUS</th><th>ARRIVE (UTC)</th><th>DEPART (UTC)</th><th>X</th></tr>
+                    </thead>
+                    <tbody id="watch-list-body"></tbody>
+                </table>
+            </div>
         </div>
     </div>
 
@@ -82,9 +90,16 @@ HTML_CODE = """
         let lastData = null;
         let pulseVal = 0;
 
+        function formatDuration(start) {
+            const diff = Math.floor(Date.now()/1000 - start);
+            const m = Math.floor(diff/60);
+            const s = diff % 60;
+            return m + "m " + s + "s";
+        }
+
         async function addToWatch(uuid, name) {
             await fetch('/watch', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({uuid, name}) });
-            fetchData(); // Force refresh
+            fetchData();
         }
 
         async function addWatchManual() {
@@ -110,7 +125,6 @@ HTML_CODE = """
             document.getElementById('i-btn').onclick = () => window.open(`https://my.secondlife.com/${p}`, '_blank');
         }
 
-        // --- GESTION DU DESSIN (60 FPS) ---
         function draw() {
             if (lastData) {
                 ctx.clearRect(0,0,512,512);
@@ -118,16 +132,11 @@ HTML_CODE = """
                 lastData.avatars.forEach((av, i) => {
                     const color = colors[i % colors.length];
                     const x = av.x * 2; const y = 512 - (av.y * 2);
-                    const isSelected = (selectedKey === av.key);
-                    
-                    if (isSelected) {
+                    if (selectedKey === av.key) {
                         const s = 8 + Math.sin(pulseVal) * 4;
-                        ctx.strokeStyle = color; ctx.lineWidth = 3;
-                        ctx.beginPath(); ctx.arc(x,y, s, 0, Math.PI*2); ctx.stroke();
+                        ctx.strokeStyle = color; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(x,y, s, 0, Math.PI*2); ctx.stroke();
                         ctx.fillStyle = color; ctx.beginPath(); ctx.arc(x,y, 4, 0, Math.PI*2); ctx.fill();
-                        
-                        const timeS = Math.floor(Date.now()/1000 - av.start_time);
-                        document.getElementById('i-time').innerText = "TRACKING: " + Math.floor(timeS/60) + "m " + (timeS%60) + "s";
+                        document.getElementById('i-time').innerText = "PRESENCE: " + formatDuration(av.start_time);
                     } else {
                         ctx.globalAlpha = selectedKey ? 0.2 : 0.8;
                         ctx.fillStyle = color; ctx.beginPath(); ctx.arc(x,y, 5, 0, Math.PI*2); ctx.fill();
@@ -138,17 +147,12 @@ HTML_CODE = """
             requestAnimationFrame(draw);
         }
 
-        // --- GESTION DES DONNEES (TOUTES LES 3 SECONDES) ---
         async function fetchData() {
             try {
                 const r = await fetch('/api');
                 const d = await r.json();
-                
-                // On ne met à jour le DOM que si la liste change pour éviter le clignotement
-                if (JSON.stringify(d) !== JSON.stringify(lastData)) {
-                    lastData = d;
-                    renderUI(d);
-                }
+                lastData = d;
+                renderUI(d);
             } catch(e){}
         }
 
@@ -162,7 +166,9 @@ HTML_CODE = """
                 const card = document.createElement('div');
                 card.className = "card" + (selectedKey === av.key ? " selected" : "");
                 card.onclick = (e) => { if(e.target.tagName !== 'BUTTON') showInspect(av); };
-                card.innerHTML = `<b style="color:${colors[i%colors.length]}">${av.name}</b><br><small>In World</small>
+                card.innerHTML = `<b style="color:${colors[i%colors.length]}">${av.name}</b> 
+                                  <span class="timer-badge">${formatDuration(av.start_time)}</span><br>
+                                  <small style="opacity:0.5">Online Now</small>
                                   <button class="quick-add" onclick="addToWatch('${av.key}', '${av.name}')">+ TRACK</button>`;
                 feed.appendChild(card);
             });
@@ -172,27 +178,29 @@ HTML_CODE = """
             Object.keys(d.watchlist).forEach(uuid => {
                 const info = d.watchlist[uuid];
                 const row = document.createElement('tr');
-                let c = info.online ? "#00ff00" : "#444";
-                let status = info.online ? "ON" : "OFF";
-                row.innerHTML = `<td><b>${info.name || 'Unknown'}</b><br><small style="color:#333; font-size:9px;">${uuid}</small></td>
-                                 <td style="color:${c}; font-weight:bold;">${status}</td>
-                                 <td><span class="del-btn" onclick="removeWatch('${uuid}')">DELETE</span></td>`;
+                let c = info.online ? "#00ff00" : "#ff4444";
+                row.innerHTML = `<td><b>${info.name || 'Unknown'}</b></td>
+                                 <td style="color:${c}; font-weight:bold;">${info.online ? 'ONLINE' : 'OFFLINE'}</td>
+                                 <td style="color:#aaa">${info.arr || '--:--'}</td>
+                                 <td style="color:#aaa">${info.dep || '--:--'}</td>
+                                 <td><span class="del-btn" onclick="removeWatch('${uuid}')">X</span></td>`;
                 wBody.appendChild(row);
             });
         }
 
-        setInterval(fetchData, 3000);
-        draw(); // Lancer l'animation
+        setInterval(fetchData, 2000);
+        draw();
     </script>
 </body>
 </html>
 """
 
-# ... Reste du code Python (handle, watch, unwatch) identique à la V7.2 ...
 @app.route('/api', methods=['GET', 'POST'])
 def handle():
     global db, times, watchlist
     now = time.time()
+    dt_now = datetime.now().strftime("%H:%M:%S")
+    
     if request.method == 'POST':
         try:
             data = request.get_json(silent=True)
@@ -201,8 +209,11 @@ def handle():
             db["coords"] = data.get("grid_coords", {"x":0, "y":0})
             incoming = data.get("avatars", [])
             uids_present = [av.get("key") for av in incoming]
+            
+            # Nettoyage présence locale
             for uid in list(times.keys()):
                 if uid not in uids_present: del times[uid]
+            
             active_list = []
             for av in incoming:
                 uid = av.get("key")
@@ -212,6 +223,8 @@ def handle():
                     active_list.append(av)
                     if uid in watchlist: watchlist[uid]["name"] = av.get("name", "Unknown")
             db["avatars"] = active_list
+            
+            # Update Watchlist Log
             for w_uid in list(watchlist.keys()):
                 try:
                     url = f"http://world.secondlife.com/resident/{w_uid}"
@@ -219,7 +232,13 @@ def handle():
                         content = f.read().decode('utf-8').lower()
                         is_on = "online" in content and "offline" not in content
                         if w_uid in uids_present: is_on = True
-                        if is_on and not watchlist[w_uid]["online"]: watchlist[w_uid]["start"] = now
+                        
+                        # Détection changement de statut pour log
+                        if is_on and not watchlist[w_uid]["online"]:
+                            watchlist[w_uid]["arr"] = dt_now # Arrivée
+                        elif not is_on and watchlist[w_uid]["online"]:
+                            watchlist[w_uid]["dep"] = dt_now # Départ
+                            
                         watchlist[w_uid]["online"] = is_on
                 except: pass
             return "OK", 200
@@ -230,7 +249,8 @@ def handle():
 def add_watch():
     data = request.get_json(silent=True)
     uid = data.get("uuid"); name = data.get("name", "")
-    if uid and uid not in watchlist: watchlist[uid] = {"name": name, "online": False, "start": 0}
+    if uid and uid not in watchlist:
+        watchlist[uid] = {"name": name, "online": False, "arr": "", "dep": ""}
     return "OK"
 
 @app.route('/unwatch', methods=['POST'])
