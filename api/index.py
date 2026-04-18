@@ -2,102 +2,125 @@ from flask import Flask, request, jsonify, render_template_string, session, redi
 import time
 
 app = Flask(__name__)
-app.secret_key = "NOX_ZETA_GLOBAL_STAY_V16"
+app.secret_key = "NOX_ZETA_FIX_404_V16"
 
+# Simulation de base de données
 users_db = {
     "admin": {
         "pw": "1234",
-        "avatars": [],    # Présence locale (Radar)
-        "watchlist": [],  # [{ "name": "...", "uuid": "...", "online_sl": False }]
-        "history": {}
+        "avatars": [],    # Présence locale
+        "watchlist": [],  # [{"name": "...", "uuid": "...", "online_sl": False}]
+        "history": {},
+        "coords": {"x":0, "y":0}
     }
 }
 
-# --- Logique de l'Interface ---
+@app.route('/')
+def index():
+    if 'user' not in session: return redirect(url_for('login'))
+    return render_template_string(INTERFACE_HTML, user_name=session['user'])
+
+# --- ROUTE CRITIQUE : RECEPTION RADAR ---
+@app.route('/update_radar', methods=['POST'])
+def update_radar():
+    data = request.get_json(silent=True) or {}
+    user = data.get("operator_id", "admin").lower()
+    if user in users_db:
+        users_db[user]['avatars'] = data.get('avatars', [])
+        users_db[user]['coords'] = data.get('grid_coords', {"x":0, "y":0})
+        users_db[user]['region'] = data.get('region', 'Unknown')
+        return "OK", 200
+    return "User Not Found", 404
+
+# --- ROUTE CRITIQUE : STATUS GLOBAL ---
+@app.route('/update_global_status', methods=['POST'])
+def update_global():
+    data = request.get_json(silent=True) or {}
+    uuid = data.get('uuid')
+    status = data.get('status') == "1"
+    # On met à jour le statut dans toutes les watchlists qui contiennent cet UUID
+    for u in users_db:
+        for agent in users_db[u]['watchlist']:
+            if agent.get('uuid') == uuid:
+                agent['online_sl'] = status
+    return "OK", 200
+
+# --- ROUTE CRITIQUE : LISTE UUID POUR LSL ---
+@app.route('/get_watchlist_uuids')
+def get_watchlist_uuids():
+    user = request.args.get('operator_id', 'admin').lower()
+    if user in users_db:
+        uuids = [a['uuid'] for a in users_db[user]['watchlist'] if a.get('uuid')]
+        return jsonify(uuids)
+    return jsonify([])
+
+@app.route('/api_data')
+def api_data():
+    u = session.get('user', 'admin')
+    return jsonify(users_db.get(u, {}))
+
+@app.route('/toggle_watch', methods=['POST'])
+def toggle_watch():
+    if 'user' not in session: return "Auth Error", 401
+    data = request.get_json()
+    u = session['user']
+    name, uuid = data.get('name'), data.get('uuid')
+    
+    wl = users_db[u]['watchlist']
+    exists = next((item for item in wl if item["name"] == name), None)
+    
+    if exists:
+        users_db[u]['watchlist'].remove(exists)
+    else:
+        users_db[u]['watchlist'].append({"name": name, "uuid": uuid, "online_sl": True})
+    return jsonify({"status": "ok"})
+
+# --- INTERFACE HTML (Simplifiée pour la démo) ---
 INTERFACE_HTML = """
 <!DOCTYPE html>
-<html lang="fr">
+<html>
 <head>
+    <title>NOX//ZETA v1.6.1</title>
     <style>
-        :root { --cyan: #00ffff; --red: #ff3131; --green: #00ffaa; --bg: #020205; --panel: rgba(12,12,25,0.95); }
-        body { background: var(--bg); color: #eee; font-family: 'Rajdhani', sans-serif; margin: 0; }
-        .status-badge { font-size: 9px; padding: 2px 5px; border-radius: 3px; font-weight: bold; border: 1px solid; }
-        
-        /* Vert : Sur ton radar */
-        .st-radar { color: var(--green); border-color: var(--green); background: rgba(0,255,170,0.1); }
-        /* Jaune : Connecté à SL mais ailleurs */
-        .st-grid { color: #f1c40f; border-color: #f1c40f; background: rgba(241,196,15,0.1); }
-        /* Rouge : Déconnecté de SL */
-        .st-off { color: #666; border-color: #666; background: rgba(255,255,255,0.05); }
-        
-        .item { background: rgba(255,255,255,0.02); border: 1px solid rgba(0,255,255,0.1); padding: 10px; margin-bottom: 8px; }
-        .name { color: var(--cyan); font-family: 'Orbitron'; cursor: pointer; }
+        body { background: #020205; color: #0ff; font-family: 'Orbitron', sans-serif; }
+        .st-radar { color: #0f0; border: 1px solid #0f0; padding: 2px; } /* En ligne ici */
+        .st-grid { color: #ff0; border: 1px solid #ff0; padding: 2px; }  /* En ligne ailleurs */
+        .st-off { color: #666; border: 1px solid #666; padding: 2px; }   /* Déconnecté */
+        .item { border-bottom: 1px solid #222; padding: 10px; }
     </style>
 </head>
-<body>
-    <div style="display:flex; height:100vh;">
-        <div style="width:70%; border-right:1px solid #222; padding:20px;">
-             <h3 style="color:var(--cyan)">TACTICAL RADAR</h3>
-             <div id="radar-container">/* Carte ici */</div>
-        </div>
-        
-        <div style="width:30%; padding:20px; background:var(--panel);">
-            <h3 style="color:var(--red)">WATCHLIST GLOBALE</h3>
-            <div id="watch-list"></div>
-        </div>
-    </div>
-
+<body onload="setInterval(refresh, 2000)">
+    <h1>TACTICAL MONITORING</h1>
+    <div id="main"></div>
     <script>
-        async function updateUI() {
-            const res = await fetch('/api_data');
-            const data = await res.json();
-            const wl = data.watchlist || [];
-            const local = data.avatars || []; // Agents vus par le scanner
-
-            document.getElementById('watch-list').innerHTML = wl.map(w => {
-                const isLocal = local.find(l => l.uuid === w.uuid);
-                const isOnlineSL = w.online_sl; // Info venant du dataserver LSL
+        async function refresh() {
+            const r = await fetch('/api_data');
+            const d = await r.json();
+            let html = "<h3>WATCHLIST PERSISTANTE</h3>";
+            d.watchlist.forEach(w => {
+                const isLocal = d.avatars.find(a => a.uuid === w.uuid);
+                let status = w.online_sl ? "st-grid" : "st-off";
+                let txt = w.online_sl ? "SL ONLINE" : "OFFLINE";
+                if(isLocal) { status = "st-radar"; txt = "LOCAL"; }
                 
-                let statusClass = "st-off";
-                let statusText = "OFFLINE";
-
-                if (isLocal) {
-                    statusClass = "st-radar";
-                    statusText = "SUR RADAR";
-                } else if (isOnlineSL) {
-                    statusClass = "st-grid";
-                    statusText = "EN LIGNE (AUTRE REGION)";
-                }
-
-                return `
-                <div class="item">
-                    <span class="name">${w.name}</span>
-                    <span class="status-badge ${statusClass}">${statusText}</span>
-                    <div style="font-size:10px; color:#555; margin-top:5px;">UUID: ${w.uuid}</div>
-                </div>`;
-            }).join('');
+                html += `<div class='item'>${w.name} <span class='${status}'>${txt}</span></div>`;
+            });
+            document.getElementById('main').innerHTML = html;
         }
-        setInterval(updateUI, 2000);
     </script>
 </body>
 </html>
 """
 
-@app.route('/api_data')
-def api_data():
-    return jsonify(users_db.get(session.get('user', 'admin'), {}))
+# Ajouter ici les routes /login et /logout (identiques aux précédentes)
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        u = request.form.get('u', '').lower()
+        if u in users_db:
+            session['user'] = u
+            return redirect(url_for('index'))
+    return '<form method="POST"><input name="u"><button>LOGIN</button></form>'
 
-@app.route('/update_global_status', methods=['POST'])
-def update_global():
-    # Cette route est appelée par le script LSL (dataserver)
-    data = request.json
-    uuid = data.get('uuid')
-    is_online = (data.get('status') == "1")
-    
-    for user in users_db:
-        for agent in users_db[user]['watchlist']:
-            if agent['uuid'] == uuid:
-                agent['online_sl'] = is_online # On met à jour le statut global
-    return "OK"
-
-# ... (reste du code Flask : /login, /toggle_watch etc)
+@app.route('/logout')
+def logout(): session.clear(); return redirect(url_for('login'))
