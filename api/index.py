@@ -4,19 +4,19 @@ import time
 app = Flask(__name__)
 
 db = {
-    "region": "SYS_SCANNING...",
+    "region": "SECURE_SCANNING...",
     "coords": {"x": 0, "y": 0},
     "avatars": []
 }
 times = {}
 
-# --- INTERFACE TACTIQUE V5.6 (FIX PHOTO + DURATION) ---
+# --- INTERFACE TACTIQUE V5.7 (FINAL PHOTO FIX + DURATION) ---
 HTML_CODE = """
 <!DOCTYPE html>
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <title>TACTICAL_HUD // NOX_V5.6</title>
+    <title>TACTICAL_HUD // NOX_V5.7</title>
     <style>
         :root { --p: #00ffff; --bg: #010103; --panel: #05050a; --font: 'Fira Code', monospace; }
         body { background: var(--bg); color: #a0c0c0; font-family: var(--font); margin: 0; padding: 15px; height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
@@ -38,9 +38,9 @@ HTML_CODE = """
         .inspector { background: #000; border: 1px solid #222; display: flex; flex-direction: column; border-top: 2px solid var(--p); }
         .inspect-header { padding: 10px; font-size: 10px; color: var(--p); background: rgba(0,255,255,0.05); text-align: center; letter-spacing: 2px; }
         
-        .inspect-photo-area { width: 100%; aspect-ratio: 1; background: #0a0a0a; border-bottom: 1px solid #222; display: flex; align-items: center; justify-content: center; overflow: hidden; }
-        #i-img { width: 100%; height: 100%; object-fit: cover; display: none; }
-        .placeholder { font-size: 10px; opacity: 0.3; text-align: center; }
+        .inspect-photo-area { width: 100%; aspect-ratio: 1; background: #0a0a0a; border-bottom: 1px solid #222; display: flex; align-items: center; justify-content: center; overflow: hidden; position: relative; }
+        #i-img { width: 100%; height: 100%; object-fit: cover; z-index: 2; position: absolute; top:0; left:0; display:none; }
+        .placeholder { font-size: 10px; opacity: 0.3; text-align: center; z-index: 1; }
 
         .inspect-details { padding: 15px; flex: 1; overflow-y: auto; }
         .label { font-size: 9px; color: var(--p); opacity: 0.6; margin-top: 12px; text-transform: uppercase; }
@@ -51,7 +51,7 @@ HTML_CODE = """
 </head>
 <body>
     <header>
-        <div style="font-size: 16px; font-weight: bold; letter-spacing: 4px; color: var(--p);">[ TACTICAL_HUD_V5.6 ]</div>
+        <div style="font-size: 16px; font-weight: bold; letter-spacing: 4px; color: var(--p);">[ TACTICAL_HUD_V5.7 ]</div>
         <div id="sim-info" style="font-size: 10px;">SIGNAL_ACTIVE</div>
     </header>
 
@@ -66,23 +66,23 @@ HTML_CODE = """
         <div class="inspector">
             <div class="inspect-header">// TARGET_INVESTIGATION</div>
             <div class="inspect-photo-area">
-                <img id="i-img" src="" onerror="this.src='https://world.secondlife.com/static/img/avatars/default_avatar.png'">
-                <div id="i-wait" class="placeholder">SELECT_TARGET</div>
+                <img id="i-img" src="" onload="this.style.display='block'">
+                <div class="placeholder">LOADING_DATA...<br><span style="font-size:8px;">(Photo if available)</span></div>
             </div>
             <div class="inspect-details">
-                <div class="label">Agent Name</div>
+                <div class="label">Identité</div>
                 <div id="i-name" class="val">---</div>
                 
-                <div class="label">Presence Duration</div>
+                <div class="label">Temps de présence</div>
                 <div id="i-time" class="val" style="color: var(--p);">00m 00s</div>
 
-                <div class="label">Position Data</div>
+                <div class="label">Localisation</div>
                 <div id="i-pos" class="val">---</div>
                 
                 <div class="label">UUID</div>
-                <div id="i-key" class="val" style="font-size:10px; color:#666;">---</div>
+                <div id="i-key" class="val" style="font-size:10px; color:#444;">---</div>
 
-                <button id="i-btn" class="btn">VIEW WEB PROFILE</button>
+                <button id="i-btn" class="btn">PROFIL COMPLET</button>
             </div>
         </div>
     </div>
@@ -103,18 +103,19 @@ HTML_CODE = """
         function showProfile(av) {
             selectedKey = av.key;
             const img = document.getElementById('i-img');
-            const wait = document.getElementById('i-wait');
             const btn = document.getElementById('i-btn');
             
-            // Correction de l'URL de la photo (Fallback sur world.secondlife)
-            img.src = `https://my-secondlife-p01.s3.amazonaws.com/users/${av.key.replace(/-/g, '_')}/thumb_sl_image.png`;
-            img.style.display = 'block';
-            wait.style.display = 'none';
+            // Nouvelle URL plus robuste pour la photo
+            img.style.display = 'none';
+            img.src = `https://secondlife.com/app/image/${av.img_id || '00000000-0000-0000-0000-000000000000'}/2`;
+            
+            // Si l'avatar n'envoie pas d'ID d'image, on utilise l'ID de l'agent
+            if(!av.img_id) {
+                img.src = `https://id-service.secondlife.com/avatars/${av.key}/profile_image.png`;
+            }
 
             document.getElementById('i-name').innerText = av.name.toUpperCase();
             document.getElementById('i-key').innerText = av.key;
-            document.getElementById('i-pos').innerText = `${Math.floor(av.x)}, ${Math.floor(av.y)}`;
-            
             btn.style.display = 'block';
             btn.onclick = () => window.open(`https://my.secondlife.com/${av.name.replace(/ /g, '.')}`, '_blank');
         }
@@ -124,7 +125,7 @@ HTML_CODE = """
                 const r = await fetch('/api');
                 const d = await r.json();
                 
-                document.getElementById('sim-info').innerText = `REGION: ${d.region.toUpperCase()} [${d.coords.x},${d.coords.y}]`;
+                document.getElementById('sim-info').innerText = `REGION: ${d.region.toUpperCase()}`;
                 document.getElementById('map-bg').style.backgroundImage = `url('https://map.secondlife.com/map-1-${d.coords.x}-${d.coords.y}-objects.jpg')`;
                 
                 ctx.clearRect(0,0,512,512);
@@ -136,13 +137,11 @@ HTML_CODE = """
                     const x = av.x * 2; const y = 512 - (av.y * 2);
                     const duration = Math.floor(Date.now()/1000 - av.start_time);
 
-                    // Mise à jour de l'inspecteur en temps réel si l'agent est sélectionné
                     if(selectedKey === av.key) {
                         document.getElementById('i-time').innerText = fmtTime(duration);
                         document.getElementById('i-pos').innerText = `${Math.floor(av.x)}, ${Math.floor(av.y)}`;
                     }
 
-                    // Trails
                     if(!trails[av.key]) trails[av.key] = [];
                     let lp = trails[av.key][trails[av.key].length - 1];
                     if(!lp || Math.abs(lp.x - x) > 1 || Math.abs(lp.y - y) > 1) trails[av.key].push({x, y});
@@ -152,15 +151,13 @@ HTML_CODE = """
                     trails[av.key].forEach((p, idx) => { if(idx==0) ctx.moveTo(p.x,p.y); else ctx.lineTo(p.x,p.y); });
                     ctx.stroke(); ctx.globalAlpha = 1.0;
 
-                    // Draw dot
                     ctx.strokeStyle = color; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(x,y,6,0,7); ctx.stroke(); 
                     ctx.fillStyle = "white"; ctx.beginPath(); ctx.arc(x,y,1.5,0,7); ctx.fill(); 
 
-                    // List Card
                     const card = document.createElement('div');
                     card.className = "card";
                     card.onclick = () => showProfile(av);
-                    card.innerHTML = `<b style="color:${color}">${av.name}</b><br><span style="font-size:9px; opacity:0.5;">DURATION: ${fmtTime(duration)}</span>`;
+                    card.innerHTML = `<b style="color:${color}">${av.name}</b><br><span style="font-size:9px; opacity:0.5;">DURÉE: ${fmtTime(duration)}</span>`;
                     feed.appendChild(card);
                 });
             } catch(e){}
@@ -169,28 +166,3 @@ HTML_CODE = """
     </script>
 </body>
 </html>
-"""
-
-@app.route('/api', methods=['GET', 'POST'])
-def handle():
-    global db, times
-    if request.method == 'POST':
-        try:
-            data = request.json
-            db["region"] = data.get("region", "UNK")
-            db["coords"] = data.get("grid_coords", {"x":0, "y":0})
-            active = []
-            now = time.time()
-            for av in data.get("avatars", []):
-                uid = av.get("key")
-                if uid:
-                    if uid not in times: times[uid] = now
-                    av["start_time"] = times[uid]
-                    active.append(av)
-            db["avatars"] = active
-            return "OK", 200
-        except: return "ERR", 500
-    return jsonify(db)
-
-@app.route('/')
-def home(): return render_template_string(HTML_CODE)
