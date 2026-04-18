@@ -14,110 +14,125 @@ HTML_CODE = """
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <title>NOX_TACTICAL_V7.5</title>
+    <title>NOX_TACTICAL_V7.6</title>
     <style>
         :root { --p: #00ffff; --bg: #010103; --panel: #05050a; --font: 'Fira Code', monospace; }
         body { background: var(--bg); color: #a0c0c0; font-family: var(--font); margin: 0; padding: 15px; height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
         
-        header { border-bottom: 2px solid var(--p); background: rgba(0,255,255,0.02); padding: 10px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+        header { border-bottom: 2px solid var(--p); background: rgba(0,255,255,0.02); padding: 10px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
         
-        /* Layout Principal */
-        .grid { display: grid; grid-template-columns: 1fr auto; grid-template-rows: 512px 1fr; gap: 15px; flex: 1; overflow: hidden; }
+        /* Layout */
+        .main-container { display: flex; flex: 1; overflow: hidden; gap: 0; border: 1px solid #222; }
 
-        .map-wrapper { grid-column: 1; grid-row: 1; border: 1px solid #222; background: #000; position: relative; width: 512px; height: 512px; }
+        /* Zone Gauche (Carte + Watchlist) */
+        .left-zone { display: flex; flex-direction: column; flex: 1; min-width: 512px; overflow: hidden; }
+        
+        .map-wrapper { width: 512px; height: 512px; background: #000; position: relative; flex-shrink: 0; border-right: 1px solid #222; }
         #map-bg { width: 100%; height: 100%; background-size: cover; position: absolute; opacity: 0.6; filter: brightness(0.5); }
         canvas { position: absolute; top:0; left:0; z-index: 10; cursor: crosshair; }
 
-        /* Colonne de droite ÉTIRABLE */
-        .right-panel { 
-            grid-column: 2; grid-row: 1 / 3; 
-            display: flex; flex-direction: column; gap: 15px; 
-            overflow: hidden; 
-            min-width: 250px; max-width: 800px;
-            width: 350px; /* Largeur par défaut */
-            resize: horizontal; 
-            direction: rtl; /* Place la poignée de redimensionnement à gauche */
-            border-left: 2px solid #222;
-            padding-left: 10px;
-        }
-        .right-panel > * { direction: ltr; } /* Remet le texte dans le bon sens */
+        .watchlist-panel { flex: 1; background: #05080a; border-top: 2px solid #ff00ff; padding: 10px; display: flex; flex-direction: column; overflow: hidden; }
 
-        .list { flex: 1; background: var(--panel); border: 1px solid #111; padding: 15px; overflow-y: auto; border-left: 2px solid var(--p); }
+        /* Diviseur ÉTIREUR */
+        .resizer { width: 8px; background: #111; cursor: col-resize; transition: background 0.2s; position: relative; z-index: 20; border-left: 1px solid #222; border-right: 1px solid #222; }
+        .resizer:hover { background: var(--p); }
+        .resizer::after { content: "||"; color: #333; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(90deg); font-size: 10px; }
+
+        /* Zone Droite (Liste) */
+        .right-zone { width: 350px; min-width: 200px; max-width: 700px; display: flex; flex-direction: column; background: var(--bg); overflow: hidden; }
         
-        .card { background: rgba(255,255,255,0.01); border: 1px solid #1a1a1a; padding: 10px; margin-bottom: 5px; cursor: pointer; position: relative; }
-        .card:hover { border-color: var(--p); background: rgba(0,255,255,0.05); }
+        .inspector { background: #000; border-bottom: 2px solid var(--p); padding: 15px; min-height: 120px; flex-shrink: 0; display: flex; }
+        #i-img { width: 80px; height: 80px; border: 1px solid #333; margin-right: 15px; }
+        
+        .list { flex: 1; background: var(--panel); padding: 10px; overflow-y: auto; }
+        
+        .card { background: rgba(255,255,255,0.01); border: 1px solid #1a1a1a; padding: 10px; margin-bottom: 5px; cursor: pointer; position: relative; font-size: 12px; }
+        .card:hover { border-color: var(--p); }
         .card.selected { border-left: 4px solid var(--p); background: rgba(0,255,255,0.1); }
         
-        .quick-add { position: absolute; right: 10px; top: 10px; background: #ff00ff; color: #000; border: none; padding: 2px 8px; font-weight: bold; font-size: 10px; cursor: pointer; }
+        .quick-add { position: absolute; right: 8px; top: 8px; background: #ff00ff; color: #000; border: none; padding: 2px 6px; font-weight: bold; font-size: 9px; cursor: pointer; }
         
-        .watchlist-panel { grid-column: 1; grid-row: 2; background: #05080a; border: 1px solid #1a2025; border-top: 2px solid #ff00ff; padding: 10px; display: flex; flex-direction: column; overflow: hidden; }
+        .w-table { width: 100%; border-collapse: collapse; font-size: 10px; }
+        .w-table th { text-align: left; color: #ff00ff; border-bottom: 1px solid #222; padding: 5px; }
+        .w-table td { padding: 5px; border-bottom: 1px solid #111; }
         
-        .w-table { width: 100%; border-collapse: collapse; font-size: 10px; table-layout: fixed; }
-        .w-table th { text-align: left; color: #ff00ff; border-bottom: 1px solid #222; padding: 5px; font-size: 9px; }
-        .w-table td { padding: 5px; border-bottom: 1px solid #111; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        
-        .inspector { background: #000; border: 1px solid #222; padding: 15px; min-height: 120px; border-top: 2px solid var(--p); display: flex; }
-        #i-img { width: 80px; height: 80px; border: 1px solid #333; margin-right: 15px; flex-shrink: 0; }
-        
-        .timer-badge { color: var(--p); font-size: 10px; background: rgba(0,255,255,0.1); padding: 2px 5px; border-radius: 3px; }
-        input { background: #000; border: 1px solid #333; color: var(--p); padding: 5px; font-family: inherit; width: 120px; }
+        .timer-badge { color: var(--p); font-size: 10px; background: rgba(0,255,255,0.1); padding: 2px 4px; border-radius: 3px; }
+        input { background: #000; border: 1px solid #333; color: var(--p); padding: 4px; width: 120px; font-size: 11px; }
 
-        ::-webkit-scrollbar { width: 5px; height: 5px; }
+        ::-webkit-scrollbar { width: 4px; }
         ::-webkit-scrollbar-thumb { background: #333; }
-        ::-webkit-scrollbar-thumb:hover { background: var(--p); }
     </style>
 </head>
 <body>
     <header>
-        <div style="font-size: 16px; font-weight: bold; letter-spacing: 4px; color: var(--p);">[ NOX_TACTICAL_V7.5 ]</div>
-        <div id="sim-status" style="font-size: 10px; opacity: 0.5;">UPLINK_READY</div>
+        <div style="font-size: 16px; font-weight: bold; letter-spacing: 4px; color: var(--p);">[ NOX_SYSTEM_V7.6 ]</div>
+        <div id="sim-status" style="font-size: 10px; opacity: 0.4;">UPLINK_STABLE</div>
     </header>
 
-    <div class="grid">
-        <div class="map-wrapper"><div id="map-bg"></div><canvas id="cv" width="512" height="512"></canvas></div>
-        
-        <div class="right-panel">
-            <div class="inspector">
-                <div id="inspect-ui" style="display:none; width:100%; overflow:hidden;">
-                    <img id="i-img" src="">
-                    <div style="display:inline-block; vertical-align:top;">
-                        <div id="i-name" style="font-weight:bold; color:#fff; font-size:16px; margin-bottom:5px; white-space:nowrap;">---</div>
-                        <div id="i-time" style="font-size:11px; color:var(--p); margin-bottom:10px;">---</div>
-                        <button id="i-btn" style="padding:4px 12px; background:var(--p); border:none; cursor:pointer; font-weight:bold; font-size:10px;">PROFIL</button>
+    <div class="main-container">
+        <div class="left-zone">
+            <div class="map-wrapper"><div id="map-bg"></div><canvas id="cv" width="512" height="512"></canvas></div>
+            <div class="watchlist-panel">
+                <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+                    <span style="font-size:10px; color:#ff00ff;">// TRACKER_LOGS</span>
+                    <div>
+                        <input type="text" id="watch-uuid" placeholder="UUID...">
+                        <button onclick="addWatchManual()" style="background:#ff00ff; border:none; padding:4px; font-size:10px; cursor:pointer;">ADD</button>
                     </div>
                 </div>
-                <div id="inspect-none" style="text-align:center; width:100%; opacity:0.2; font-size:10px; margin-top:35px;">TARGET_SCANNER_IDLE</div>
-            </div>
-            <div class="list" id="feed"></div>
-        </div>
-
-        <div class="watchlist-panel">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                <div style="font-size:10px; color:#ff00ff; font-weight:bold;">// DATA_LOGS</div>
-                <div>
-                    <input type="text" id="watch-uuid" placeholder="UUID...">
-                    <button onclick="addWatchManual()" style="background:#ff00ff; border:none; padding:5px 10px; font-size:10px; cursor:pointer; font-weight:bold;">TRACK</button>
+                <div style="overflow-y:auto; flex:1;">
+                    <table class="w-table">
+                        <thead><tr><th>AGENT</th><th>STAT</th><th>ARR</th><th>DEP</th><th>X</th></tr></thead>
+                        <tbody id="watch-list-body"></tbody>
+                    </table>
                 </div>
             </div>
-            <div style="overflow-y:auto; flex:1;">
-                <table class="w-table">
-                    <colgroup>
-                        <col style="width: 40%;">
-                        <col style="width: 15%;">
-                        <col style="width: 15%;">
-                        <col style="width: 15%;">
-                        <col style="width: 15%;">
-                    </colgroup>
-                    <thead>
-                        <tr><th>AGENT / UUID</th><th>STATUS</th><th>ARRIVE</th><th>DEPART</th><th>DEL</th></tr>
-                    </thead>
-                    <tbody id="watch-list-body"></tbody>
-                </table>
+        </div>
+
+        <div class="resizer" id="dragMe"></div>
+
+        <div class="right-zone" id="rightSide">
+            <div class="inspector">
+                <div id="inspect-ui" style="display:none; width:100%;">
+                    <img id="i-img" src="">
+                    <div style="display:inline-block; vertical-align:top;">
+                        <div id="i-name" style="font-weight:bold; color:#fff; font-size:15px; margin-bottom:4px;">---</div>
+                        <div id="i-time" style="font-size:10px; color:var(--p); margin-bottom:8px;">---</div>
+                        <button id="i-btn" style="padding:4px 10px; background:var(--p); border:none; cursor:pointer; font-size:10px; font-weight:bold;">PROFIL SL</button>
+                    </div>
+                </div>
+                <div id="inspect-none" style="text-align:center; width:100%; opacity:0.2; font-size:10px; margin-top:35px;">IDLE</div>
             </div>
+            <div class="list" id="feed"></div>
         </div>
     </div>
 
     <script>
+        // --- LOGIQUE DU REDIMENSIONNEMENT (JS) ---
+        const resizer = document.getElementById('dragMe');
+        const rightSide = document.getElementById('rightSide');
+        let isResizing = false;
+
+        resizer.addEventListener('mousedown', (e) => {
+            isResizing = true;
+            document.body.style.cursor = 'col-resize';
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (!isResizing) return;
+            // On calcule la nouvelle largeur basée sur la position de la souris
+            const newWidth = window.innerWidth - e.clientX;
+            if (newWidth > 200 && newWidth < 800) {
+                rightSide.style.width = `${newWidth}px`;
+            }
+        });
+
+        document.addEventListener('mouseup', () => {
+            isResizing = false;
+            document.body.style.cursor = 'default';
+        });
+
+        // --- RESTE DU CODE (MAP & DATA) ---
         const canvas = document.getElementById('cv');
         const ctx = canvas.getContext('2d');
         const colors = ["#00ffff", "#ff00ff", "#00ff9f", "#ffff00"];
@@ -169,7 +184,7 @@ HTML_CODE = """
                         const s = 8 + Math.sin(pulseVal) * 4;
                         ctx.strokeStyle = color; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(x,y, s, 0, Math.PI*2); ctx.stroke();
                         ctx.fillStyle = color; ctx.beginPath(); ctx.arc(x,y, 4, 0, Math.PI*2); ctx.fill();
-                        document.getElementById('i-time').innerText = "SESSION: " + formatDuration(av.start_time);
+                        document.getElementById('i-time').innerText = "ONLINE: " + formatDuration(av.start_time);
                     } else {
                         ctx.globalAlpha = selectedKey ? 0.2 : 0.8;
                         ctx.fillStyle = color; ctx.beginPath(); ctx.arc(x,y, 5, 0, Math.PI*2); ctx.fill();
@@ -192,7 +207,6 @@ HTML_CODE = """
         function renderUI(d) {
             document.getElementById('sim-status').innerText = "REGION: " + d.region;
             document.getElementById('map-bg').style.backgroundImage = `url('https://map.secondlife.com/map-1-${d.coords.x}-${d.coords.y}-objects.jpg')`;
-            
             const feed = document.getElementById('feed');
             feed.innerHTML = "";
             d.avatars.forEach((av, i) => {
@@ -201,7 +215,6 @@ HTML_CODE = """
                 card.onclick = (e) => { if(e.target.tagName !== 'BUTTON') showInspect(av); };
                 card.innerHTML = `<b style="color:${colors[i%colors.length]}">${av.name}</b> 
                                   <span class="timer-badge">${formatDuration(av.start_time)}</span><br>
-                                  <small style="font-size:9px; opacity:0.3">${av.key}</small>
                                   <button class="quick-add" onclick="addToWatch('${av.key}', '${av.name}')">+ LOG</button>`;
                 feed.appendChild(card);
             });
@@ -212,15 +225,14 @@ HTML_CODE = """
                 const info = d.watchlist[uuid];
                 const row = document.createElement('tr');
                 let c = info.online ? "#00ff00" : "#ff4444";
-                row.innerHTML = `<td><b>${info.name || 'Unknown'}</b><br><small style="font-size:8px;opacity:0.3">${uuid}</small></td>
+                row.innerHTML = `<td><b>${info.name || '...'}</b></td>
                                  <td style="color:${c}; font-weight:bold;">${info.online ? 'ON' : 'OFF'}</td>
                                  <td style="color:#aaa">${info.arr || '--:--'}</td>
                                  <td style="color:#aaa">${info.dep || '--:--'}</td>
-                                 <td><button onclick="removeWatch('${uuid}')" style="background:none; border:1px solid #411; color:#f44; cursor:pointer;">X</button></td>`;
+                                 <td><span style="color:#f44; cursor:pointer;" onclick="removeWatch('${uuid}')">X</span></td>`;
                 wBody.appendChild(row);
             });
         }
-
         setInterval(fetchData, 2000);
         draw();
     </script>
@@ -228,7 +240,7 @@ HTML_CODE = """
 </html>
 """
 
-# ... LE RESTE DU CODE PYTHON (API) EST LE MÊME QUE LA V7.4 ...
+# ... (Reste du code Python API inchangé par rapport à 7.5) ...
 @app.route('/api', methods=['GET', 'POST'])
 def handle():
     global db, times, watchlist
