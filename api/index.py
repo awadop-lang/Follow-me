@@ -3,41 +3,40 @@ import time
 
 app = Flask(__name__)
 
-# Base de données en mémoire
 db = {
-    "region": "SYS_CONNECTING...",
+    "region": "SECURE_STREAM_ACTIVE...",
     "coords": {"x": 0, "y": 0},
     "avatars": []
 }
 times = {}
 
-# --- INTERFACE TACTIQUE NOX V5.1 ---
+# --- INTERFACE TACTIQUE NOX V5.2 (TRAILS LONGUE DURÉE) ---
 HTML_CODE = """
 <!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>TACTICAL_HUD // NOX_V5</title>
+    <title>TACTICAL_HUD // NOX_V5.2</title>
     <style>
-        :root { --p: #00ffff; --bg: #020205; --panel: #05050a; --font: 'Courier New', monospace; }
+        :root { --p: #00ffff; --bg: #010103; --panel: #05050a; --font: 'Fira Code', monospace; }
         body { background: var(--bg); color: #a0c0c0; font-family: var(--font); margin: 0; padding: 15px; height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
-        header { border: 1px solid var(--p); background: rgba(0,255,255,0.05); padding: 10px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 0 10px rgba(0,255,255,0.1); }
+        header { border-bottom: 2px solid var(--p); background: rgba(0,255,255,0.02); padding: 10px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; }
         .grid { display: grid; grid-template-columns: 512px 1fr; gap: 20px; flex: 1; }
-        .map-wrapper { width: 512px; height: 512px; border: 1px solid var(--p); background: #000; position: relative; overflow: hidden; }
-        #map-bg { width: 100%; height: 100%; background-size: 100% 100%; position: absolute; opacity: 0.7; }
+        .map-wrapper { width: 512px; height: 512px; border: 1px solid #222; background: #000; position: relative; overflow: hidden; }
+        #map-bg { width: 100%; height: 100%; background-size: 100% 100%; position: absolute; opacity: 0.8; filter: brightness(0.7); }
         canvas { position: absolute; top:0; left:0; z-index: 10; }
-        .scan-line { position: absolute; width: 100%; height: 2px; background: var(--p); z-index: 11; animation: scan 4s linear infinite; box-shadow: 0 0 10px var(--p); opacity: 0.5; }
+        .scan-line { position: absolute; width: 100%; height: 1px; background: var(--p); z-index: 11; animation: scan 6s linear infinite; opacity: 0.3; }
         @keyframes scan { from { top: 0; } to { top: 100%; } }
-        .list { background: var(--panel); border: 1px solid #111; padding: 15px; overflow-y: auto; border-left: 4px solid var(--p); }
-        .card { background: rgba(255,255,255,0.02); border: 1px solid #1a1a1a; padding: 12px; margin-bottom: 10px; border-radius: 2px; }
-        .bar-bg { width: 100%; height: 4px; background: #000; margin-top: 8px; border-radius: 2px; }
-        .bar-fill { height: 100%; transition: width 1s; box-shadow: 0 0 8px currentColor; }
+        .list { background: var(--panel); border: 1px solid #111; padding: 15px; overflow-y: auto; border-left: 2px solid var(--p); }
+        .card { background: rgba(255,255,255,0.01); border: 1px solid #1a1a1a; padding: 10px; margin-bottom: 8px; border-radius: 2px; }
+        .bar-bg { width: 100%; height: 2px; background: #111; margin-top: 6px; }
+        .bar-fill { height: 100%; transition: width 1s; box-shadow: 0 0 5px currentColor; }
     </style>
 </head>
 <body>
     <header>
-        <div style="font-size: 18px; font-weight: bold; letter-spacing: 3px; color: var(--p);">[ TACTICAL_MONITOR_V5 ]</div>
-        <div id="status" style="font-size: 12px;">SIGNAL: ACTIVE</div>
+        <div style="font-size: 16px; font-weight: bold; letter-spacing: 4px; color: var(--p);">[ TACTICAL_MONITOR_V5.2 ]</div>
+        <div id="status" style="font-size: 10px; opacity: 0.6;">NET_STATUS: ENCRYPTED_LINK</div>
     </header>
     <div class="grid">
         <div class="map-wrapper">
@@ -50,8 +49,8 @@ HTML_CODE = """
     <script>
         const canvas = document.getElementById('cv');
         const ctx = canvas.getContext('2d');
-        const colors = ["#00ffff", "#ff00ff", "#00ff9f", "#ffff00", "#ff3f00", "#007fff"];
-        let trails = {}; // Historique des positions
+        const colors = ["#00ffff", "#ff00ff", "#00ff9f", "#ffff00", "#ff3f00", "#007fff", "#ff0066"];
+        let trails = {}; 
 
         async function update() {
             try {
@@ -67,32 +66,45 @@ HTML_CODE = """
                     const color = colors[i % colors.length];
                     const x = av.x * 2; const y = 512 - (av.y * 2);
 
-                    // Historique pour trajectoire
+                    // --- Logique de Trajectoire (Trails) ---
                     if(!trails[av.key]) trails[av.key] = [];
-                    trails[av.key].push({x, y});
-                    if(trails[av.key].length > 15) trails[av.key].shift();
+                    
+                    // On n'ajoute un point que si l'avatar a bougé (économie de mémoire)
+                    let lastP = trails[av.key][trails[av.key].length - 1];
+                    if(!lastP || Math.abs(lastP.x - x) > 1 || Math.abs(lastP.y - y) > 1) {
+                        trails[av.key].push({x, y});
+                    }
+                    
+                    // Persistance augmentée : on garde 500 points (plusieurs minutes de trajet)
+                    if(trails[av.key].length > 500) trails[av.key].shift();
 
-                    // Dessin Trajectoire
-                    ctx.beginPath(); ctx.strokeStyle = color; ctx.globalAlpha = 0.4; ctx.lineWidth = 1;
+                    // Dessin Trajectoire (Fine et Néon)
+                    ctx.beginPath(); ctx.strokeStyle = color; ctx.globalAlpha = 0.5; ctx.lineWidth = 1;
                     trails[av.key].forEach((p, idx) => { if(idx==0) ctx.moveTo(p.x,p.y); else ctx.lineTo(p.x,p.y); });
                     ctx.stroke(); ctx.globalAlpha = 1.0;
 
-                    // Dessin Target
-                    ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x,y,10,0,7); ctx.stroke();
-                    ctx.fillStyle = "white"; ctx.font = "bold 11px monospace"; ctx.fillText(av.name.toUpperCase(), x+15, y+5);
+                    // Dessin Target (DOT PLUS PETIT)
+                    ctx.strokeStyle = color; ctx.lineWidth = 1; 
+                    ctx.beginPath(); ctx.arc(x,y,6,0,7); ctx.stroke(); // Cercle extérieur fin
+                    ctx.fillStyle = "white"; ctx.beginPath(); ctx.arc(x,y,1.5,0,7); ctx.fill(); // Dot minuscule
+                    
+                    ctx.fillStyle = "white"; ctx.font = "10px monospace"; 
+                    ctx.shadowColor = "black"; ctx.shadowBlur = 3;
+                    ctx.fillText(av.name.toUpperCase(), x+10, y+4);
+                    ctx.shadowBlur = 0;
 
                     // HTML Card
                     const timeS = Math.floor(Date.now()/1000 - av.start_time);
-                    const pct = Math.min(100, (timeS / 1800) * 100);
+                    const pct = Math.min(100, (timeS / 3600) * 100); // Progression sur 1 heure
                     const card = document.createElement('div');
                     card.className = "card";
                     card.innerHTML = `
-                        <div style="display:flex; justify-content:space-between; font-size:12px;">
+                        <div style="display:flex; justify-content:space-between; font-size:11px;">
                             <b style="color:${color}">${av.name}</b>
-                            <span>${Math.floor(av.x)}, ${Math.floor(av.y)}</span>
+                            <span style="opacity:0.7">${Math.floor(av.x)}, ${Math.floor(av.y)}</span>
                         </div>
                         <div class="bar-bg"><div class="bar-fill" style="width:${pct}%; background:${color}; color:${color}"></div></div>
-                        <div style="font-size:10px; margin-top:5px; opacity:0.5;">DURATION: ${Math.floor(timeS/60)}m ${timeS%60}s</div>
+                        <div style="font-size:9px; margin-top:4px; opacity:0.4;">U_TIME: ${Math.floor(timeS/60)}m ${timeS%60}s</div>
                     `;
                     feed.appendChild(card);
                 });
