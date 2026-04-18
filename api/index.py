@@ -6,64 +6,94 @@ app = Flask(__name__)
 
 db = {"region": "UPLINK_STABLE", "coords": {"x": 0, "y": 0}, "avatars": []}
 times = {}      
-watchlist = {}  
+watchlist = {} # {uuid: {"name": str, "online": bool, "start": timestamp}}
 
 HTML_CODE = """
 <!DOCTYPE html>
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <title>NOX_TACTICAL_V6.9</title>
+    <title>NOX_TACTICAL_V7.0</title>
     <style>
         :root { --p: #00ffff; --bg: #010103; --panel: #05050a; --font: 'Fira Code', monospace; }
         body { background: var(--bg); color: #a0c0c0; font-family: var(--font); margin: 0; padding: 15px; height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
         header { border-bottom: 2px solid var(--p); background: rgba(0,255,255,0.02); padding: 10px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
-        .grid { display: grid; grid-template-columns: 512px 1fr 300px; grid-template-rows: 1fr 220px; gap: 15px; flex: 1; overflow: hidden; }
-        .map-wrapper { grid-row: 1 / 3; width: 512px; height: 512px; border: 1px solid #222; background: #000; position: relative; }
-        #map-bg { width: 100%; height: 100%; background-size: cover; position: absolute; opacity: 0.7; filter: brightness(0.6); }
+        
+        /* Grille réorganisée : Watchlist plus large en bas */
+        .grid { display: grid; grid-template-columns: 512px 1fr; grid-template-rows: 512px 1fr; gap: 15px; flex: 1; overflow: hidden; }
+
+        .map-wrapper { grid-column: 1; grid-row: 1; border: 1px solid #222; background: #000; position: relative; }
+        #map-bg { width: 100%; height: 100%; background-size: cover; position: absolute; opacity: 0.6; filter: brightness(0.5); }
         canvas { position: absolute; top:0; left:0; z-index: 10; }
-        .list { grid-row: 1 / 3; background: var(--panel); border: 1px solid #111; padding: 15px; overflow-y: auto; border-left: 2px solid var(--p); }
-        .card { background: rgba(255,255,255,0.01); border: 1px solid #1a1a1a; padding: 10px; margin-bottom: 8px; cursor: pointer; transition: 0.2s; }
-        .card:hover { border-color: var(--p); background: rgba(0,255,255,0.08); transform: translateX(5px); }
-        .inspector { background: #000; border: 1px solid #222; border-top: 2px solid var(--p); padding: 10px; display: flex; flex-direction: column; }
-        #i-img { width: 100%; aspect-ratio: 1; object-fit: cover; border: 1px solid #333; margin-bottom: 10px; display: none; }
-        .watchlist-panel { background: #05080a; border: 1px solid #1a2025; border-top: 2px solid #ff00ff; padding: 10px; display: flex; flex-direction: column; }
-        .watch-input-group { display: flex; gap: 5px; margin-bottom: 10px; }
-        input { background: #000; border: 1px solid #333; color: var(--p); padding: 5px; flex: 1; font-family: inherit; font-size: 11px; outline: none; }
-        .add-btn { background: #ff00ff; color: #000; border: none; padding: 5px 10px; cursor: pointer; font-weight: bold; }
-        .watch-item { font-size: 10px; padding: 6px; border-bottom: 1px solid #111; display: flex; justify-content: space-between; align-items: center; }
-        .del-btn { color: #ff0000; cursor: pointer; font-weight: bold; margin-left: 10px; border: 1px solid #400; padding: 0 4px; border-radius: 2px; }
-        .del-btn:hover { background: #ff0000; color: #fff; }
-        .dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; margin-right: 6px; }
+
+        .right-panel { grid-column: 2; grid-row: 1 / 3; display: flex; flex-direction: column; gap: 15px; overflow: hidden; }
+        
+        .list { flex: 1; background: var(--panel); border: 1px solid #111; padding: 15px; overflow-y: auto; border-left: 2px solid var(--p); }
+        .card { background: rgba(255,255,255,0.01); border: 1px solid #1a1a1a; padding: 8px; margin-bottom: 5px; cursor: pointer; font-size: 12px; }
+        .card:hover { border-color: var(--p); background: rgba(0,255,255,0.05); }
+
+        .watchlist-panel { grid-column: 1; grid-row: 2; background: #05080a; border: 1px solid #1a2025; border-top: 2px solid #ff00ff; padding: 10px; display: flex; flex-direction: column; }
+        
+        /* Tableau Watchlist */
+        .w-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+        .w-table th { text-align: left; color: #ff00ff; border-bottom: 1px solid #222; padding: 5px; font-size: 9px; }
+        .w-table td { padding: 5px; border-bottom: 1px solid #111; }
+        
+        .del-btn { color: #ff4444; cursor: pointer; border: 1px solid #411; padding: 1px 6px; font-size: 10px; }
+        .del-btn:hover { background: #ff4444; color: #fff; }
+        
+        input { background: #000; border: 1px solid #333; color: var(--p); padding: 5px; font-family: inherit; font-size: 11px; outline: none; width: 200px; }
+        .add-btn { background: #ff00ff; color: #000; border: none; padding: 5px 15px; cursor: pointer; font-weight: bold; font-size: 11px; }
+
+        .inspector { background: #000; border: 1px solid #222; padding: 10px; min-height: 150px; border-top: 2px solid var(--p); }
+        #i-img { width: 80px; height: 80px; float: left; margin-right: 15px; border: 1px solid #333; }
+        
         ::-webkit-scrollbar { width: 3px; }
         ::-webkit-scrollbar-thumb { background: var(--p); }
     </style>
 </head>
 <body>
     <header>
-        <div style="font-size: 16px; font-weight: bold; letter-spacing: 4px; color: var(--p);">[ TACTICAL_MONITOR_V6.9 ]</div>
+        <div style="font-size: 16px; font-weight: bold; letter-spacing: 4px; color: var(--p);">[ TACTICAL_MONITOR_V7.0 ]</div>
         <div id="sim-status" style="font-size: 10px; opacity: 0.5;">UPLINK_ACTIVE</div>
     </header>
 
     <div class="grid">
         <div class="map-wrapper"><div id="map-bg"></div><canvas id="cv" width="512" height="512"></canvas></div>
-        <div class="list" id="feed"></div>
-        <div class="inspector">
-            <div id="inspect-ui" style="display:none;">
-                <img id="i-img" src="" onload="this.style.display='block'">
-                <div id="i-name" style="font-weight:bold; color:#fff; font-size:14px;">---</div>
-                <div id="i-time" style="font-size:11px; color:var(--p); margin: 5px 0;">---</div>
-                <button id="i-btn" style="width:100%; padding:8px; background:var(--p); border:none; cursor:pointer; font-weight:bold; margin-top:5px;">WEB PROFILE</button>
+        
+        <div class="right-panel">
+            <div class="inspector">
+                <div id="inspect-ui" style="display:none;">
+                    <img id="i-img" src="">
+                    <div id="i-name" style="font-weight:bold; color:#fff; font-size:16px;">---</div>
+                    <div id="i-time" style="font-size:11px; color:var(--p); margin: 5px 0;">---</div>
+                    <button id="i-btn" style="padding:5px 15px; background:var(--p); border:none; cursor:pointer; font-weight:bold; margin-top:5px;">OPEN PROFILE</button>
+                </div>
+                <div id="inspect-none" style="text-align:center; opacity:0.2; font-size:10px; margin-top:40px;">SELECT_AGENT</div>
             </div>
-            <div id="inspect-none" style="text-align:center; opacity:0.2; font-size:10px; margin-top:50px;">NO_AGENT_SELECTED</div>
+            <div class="list" id="feed"></div>
         </div>
+
         <div class="watchlist-panel">
-            <div style="font-size:10px; color:#ff00ff; margin-bottom:8px; font-weight:bold;">// GLOBAL_WATCHLIST</div>
-            <div class="watch-input-group">
-                <input type="text" id="watch-uuid" placeholder="Avatar UUID...">
-                <button class="add-btn" onclick="addWatch()">ADD</button>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                <div style="font-size:10px; color:#ff00ff; font-weight:bold;">// GLOBAL_WATCHLIST</div>
+                <div class="watch-input-group">
+                    <input type="text" id="watch-uuid" placeholder="Coller UUID...">
+                    <button class="add-btn" onclick="addWatch()">TRACK</button>
+                </div>
             </div>
-            <div id="watch-list" style="overflow-y:auto; flex:1;"></div>
+            <div style="overflow-y:auto; flex:1;">
+                <table class="w-table">
+                    <thead>
+                        <tr>
+                            <th>AGENT / UUID</th>
+                            <th>STATUS</th>
+                            <th>ACTION</th>
+                        </tr>
+                    </thead>
+                    <tbody id="watch-list-body"></tbody>
+                </table>
+            </div>
         </div>
     </div>
 
@@ -113,26 +143,26 @@ HTML_CODE = """
                     ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x,y,6,0,7); ctx.stroke();
                     const card = document.createElement('div');
                     card.className = "card"; card.onclick = () => showInspect(av);
-                    card.innerHTML = `<b style="color:${color}">${av.name}</b><br><small>${Math.floor(timeS/60)}m active</small>`;
+                    card.innerHTML = `<b style="color:${color}">${av.name}</b><br><small>${Math.floor(timeS/60)}m</small>`;
                     feed.appendChild(card);
                 });
 
-                const wList = document.getElementById('watch-list'); wList.innerHTML = "";
+                const wBody = document.getElementById('watch-list-body'); wBody.innerHTML = "";
                 Object.keys(d.watchlist).forEach(uuid => {
                     const info = d.watchlist[uuid];
-                    const item = document.createElement('div');
-                    item.className = "watch-item";
-                    let status = "OFF"; let c = "#444";
-                    if(info.online) { 
-                        let diff = Math.floor((Date.now()/1000 - info.start)/60);
-                        status = "ON (" + (info.start > 0 ? diff : "?") + "m)";
-                        c = "#00ff00";
+                    const row = document.createElement('tr');
+                    let c = info.online ? "#00ff00" : "#444";
+                    let statusText = info.online ? "ONLINE" : "OFFLINE";
+                    if(info.online && info.start > 0) {
+                        statusText += " (" + Math.floor((Date.now()/1000 - info.start)/60) + "m)";
                     }
-                    item.innerHTML = `
-                        <span><i class="dot" style="background:${c}"></i>${uuid.substring(0,8)}</span>
-                        <span><b style="color:${c}">${status}</b> <span class="del-btn" onclick="removeWatch('${uuid}')">X</span></span>
+
+                    row.innerHTML = `
+                        <td style="color:#fff">${info.name || uuid.substring(0,8)}<br><small style="color:#333; font-size:9px;">${uuid}</small></td>
+                        <td style="color:${c}; font-weight:bold;">${statusText}</td>
+                        <td><span class="del-btn" onclick="removeWatch('${uuid}')">DELETE</span></td>
                     `;
-                    wList.appendChild(item);
+                    wBody.appendChild(row);
                 });
             } catch(e){}
         }
@@ -165,6 +195,9 @@ def handle():
                     if uid not in times: times[uid] = now
                     av["start_time"] = times[uid]
                     active_list.append(av)
+                    # Si l'agent est dans la watchlist, on capture son nom !
+                    if uid in watchlist:
+                        watchlist[uid]["name"] = av.get("name", "Unknown")
             db["avatars"] = active_list
 
             for w_uid in list(watchlist.keys()):
@@ -187,15 +220,14 @@ def add_watch():
     data = request.get_json(silent=True)
     uid = data.get("uuid")
     if uid and uid not in watchlist:
-        watchlist[uid] = {"online": False, "start": 0}
+        watchlist[uid] = {"name": "", "online": False, "start": 0}
     return "OK"
 
 @app.route('/unwatch', methods=['POST'])
 def unwatch():
     data = request.get_json(silent=True)
     uid = data.get("uuid")
-    if uid in watchlist:
-        del watchlist[uid]
+    if uid in watchlist: del watchlist[uid]
     return "OK"
 
 @app.route('/')
