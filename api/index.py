@@ -2,21 +2,20 @@ from flask import Flask, request, jsonify, render_template_string, session, redi
 from datetime import datetime
 
 app = Flask(__name__)
-app.secret_key = "NOX_ZETA_MULTIUSER_2026"
+app.secret_key = "NOX_ZETA_PERSISTENT_V6"
 
-# Simulation de base de données multi-utilisateurs
-# Structure : {"username": {"pw": "...", "region": "...", "coords": {}, "avatars": [], "history": {}}}
+# Base de données multi-utilisateurs (Mémoire Serveur)
 users_db = {
     "admin": {
         "pw": "1234", 
         "region": "OFFLINE", 
         "coords": {"x":0, "y":0}, 
         "avatars": [],
-        "history": {}
+        "history": {},
+        "watchlist": []  # La liste est maintenant stockée ici
     }
 }
 
-# --- INTERFACE HTML (Identique à la précédente avec support multi-user) ---
 INTERFACE_HTML = """
 <!DOCTYPE html>
 <html lang="fr">
@@ -26,12 +25,12 @@ INTERFACE_HTML = """
     <style>
         :root { --cyan: #00ffff; --magenta: #ff00ff; --red: #ff3131; --bg: #020205; --panel: rgba(10, 10, 20, 0.95); --border: rgba(0, 255, 255, 0.2); }
         body { background: var(--bg); color: #e0e0e0; font-family: 'Rajdhani', sans-serif; margin: 0; height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
-        header { height: 55px; border-bottom: 1px solid var(--border); background: var(--panel); display: flex; justify-content: space-between; align-items: center; padding: 0 20px; flex-shrink: 0; z-index: 10; }
+        header { height: 55px; border-bottom: 1px solid var(--border); background: var(--panel); display: flex; justify-content: space-between; align-items: center; padding: 0 20px; flex-shrink: 0; }
         .logo { font-family: 'Orbitron'; font-weight: 700; color: var(--cyan); letter-spacing: 2px; }
         .main-container { display: flex; flex: 1; overflow: hidden; width: 100%; }
         .column { height: 100%; overflow: hidden; display: flex; flex-direction: column; background: var(--panel); min-width: 200px; }
         .resizer { width: 4px; cursor: col-resize; background: var(--border); transition: 0.2s; flex-shrink: 0; }
-        .resizer:hover { background: var(--cyan); box-shadow: 0 0 10px var(--cyan); }
+        .resizer:hover { background: var(--cyan); }
         .col-header { padding: 15px; border-bottom: 1px solid var(--border); font-family: 'Orbitron'; font-size: 11px; color: var(--magenta); background: rgba(0,0,0,0.4); text-transform: uppercase; }
         .scroll-area { flex: 1; overflow-y: auto; padding: 12px; scrollbar-width: thin; }
         .item { background: rgba(255,255,255,0.03); border: 1px solid var(--border); padding: 12px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
@@ -69,18 +68,18 @@ INTERFACE_HTML = """
         </div>
         <div class="resizer"></div>
         <div class="column" style="width: 30%;">
-            <div class="col-header" style="color:var(--red)">Watchlist_Logs</div>
+            <div class="col-header" style="color:var(--red)">Priority_Watchlist // Session_Logs</div>
             <div id="watch-list" class="scroll-area"></div>
         </div>
     </div>
 
     <script>
-        let watchlist = JSON.parse(localStorage.getItem('nox_watchlist_' + "{{ session['user'] }}")) || [];
-
-        function toggleWatch(name) {
-            if (watchlist.includes(name)) watchlist = watchlist.filter(n => n !== name);
-            else watchlist.push(name);
-            localStorage.setItem('nox_watchlist_' + "{{ session['user'] }}", JSON.stringify(watchlist));
+        async function toggleWatch(name) {
+            await fetch('/toggle_watch', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({name: name})
+            });
             updateUI();
         }
 
@@ -88,6 +87,8 @@ INTERFACE_HTML = """
             try {
                 const res = await fetch('/api_data');
                 const data = await res.json();
+                const watchlist = data.watchlist || [];
+
                 document.getElementById('reg-name').innerText = data.region;
                 document.getElementById('count').innerText = data.avatars.length;
                 if(data.coords) document.getElementById('map-bg').style.backgroundImage = `url('https://map.secondlife.com/map-1-${data.coords.x}-${data.coords.y}-objects.jpg')`;
@@ -125,7 +126,7 @@ INTERFACE_HTML = """
             const resizers = document.querySelectorAll('.resizer');
             resizers.forEach(r => {
                 r.addEventListener('mousedown', e => {
-                    let prev = r.previousElementSibling, next = r.nextElementSibling, startX = e.pageX, startW = prev.offsetWidth;
+                    let prev = r.previousElementSibling, startX = e.pageX, startW = prev.offsetWidth;
                     const drag = e => { prev.style.width = (startW + (e.pageX - startX)) + 'px'; };
                     const stop = () => window.removeEventListener('mousemove', drag);
                     window.addEventListener('mousemove', drag); window.addEventListener('mouseup', stop);
@@ -137,8 +138,6 @@ INTERFACE_HTML = """
 </body>
 </html>
 """
-
-# --- ROUTES ---
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
@@ -157,29 +156,37 @@ def index():
             users_db[user].update({'region': data.get('region'), 'coords': data.get('grid_coords'), 'avatars': new_avs})
             return "OK", 200
         return "USER_NOT_FOUND", 404
-
     if 'user' not in session: return redirect(url_for('login'))
     return render_template_string(INTERFACE_HTML)
 
+@app.route('/toggle_watch', methods=['POST'])
+def toggle_watch():
+    if 'user' not in session: return "Unauthorized", 401
+    name = request.json.get('name')
+    user = session['user']
+    if name in users_db[user]['watchlist']:
+        users_db[user]['watchlist'].remove(name)
+    else:
+        users_db[user]['watchlist'].append(name)
+    return jsonify({"status": "ok"})
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    error = ""
     if request.method == 'POST':
         u, p = request.form.get('u').lower(), request.form.get('p')
         if u in users_db and users_db[u]['pw'] == p:
             session['user'] = u
             return redirect(url_for('index'))
-        error = "Identifiants invalides"
-    return f"""<body style="background:#020205; color:#0ff; font-family:'Orbitron'; display:flex; justify-content:center; align-items:center; height:100vh; margin:0;"><form method="POST" style="border:1px solid #0ff; padding:40px; background:rgba(0,255,255,0.05); text-align:center;"><h2>NOX_AUTH</h2><p style="color:red; font-size:10px;">{error}</p><input name="u" placeholder="UTILISATEUR" required style="background:transparent; border:1px solid #0ff; color:white; padding:10px; margin-bottom:10px; display:block; width:220px;"><input type="password" name="p" placeholder="MOT DE PASSE" required style="background:transparent; border:1px solid #0ff; color:white; padding:10px; margin-bottom:20px; display:block; width:220px;"><button type="submit" style="background:#0ff; border:none; padding:10px; width:100%; font-weight:bold; cursor:pointer;">CONNEXION</button><br><br><a href="/register" style="color:#555; font-size:10px; text-decoration:none;">CRÉER UN COMPTE</a></form></body>"""
+    return """<body style="background:#020205; color:#0ff; font-family:'Orbitron'; display:flex; justify-content:center; align-items:center; height:100vh; margin:0;"><form method="POST" style="border:1px solid #0ff; padding:40px; background:rgba(0,255,255,0.05); text-align:center;"><h2>NOX_AUTH</h2><input name="u" placeholder="UTILISATEUR" required style="background:transparent; border:1px solid #0ff; color:white; padding:10px; margin-bottom:10px; display:block; width:220px;"><input type="password" name="p" placeholder="PASS" required style="background:transparent; border:1px solid #0ff; color:white; padding:10px; margin-bottom:20px; display:block; width:220px;"><button type="submit" style="background:#0ff; border:none; padding:10px; width:100%; font-weight:bold; cursor:pointer;">CONNEXION</button><br><br><a href="/register" style="color:#555; font-size:10px; text-decoration:none;">CRÉER UN COMPTE</a></form></body>"""
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
         u, p = request.form.get('u').lower(), request.form.get('p')
         if u not in users_db:
-            users_db[u] = {"pw": p, "region": "OFFLINE", "coords": {"x":0, "y":0}, "avatars": [], "history": {}}
+            users_db[u] = {"pw": p, "region": "OFFLINE", "coords": {"x":0, "y":0}, "avatars": [], "history": {}, "watchlist": []}
             return redirect(url_for('login'))
-    return """<body style="background:#020205; color:#0ff; font-family:'Orbitron'; display:flex; justify-content:center; align-items:center; height:100vh; margin:0;"><form method="POST" style="border:1px solid #0ff; padding:40px; background:rgba(0,255,255,0.05); text-align:center;"><h2>NOX_REGISTER</h2><input name="u" placeholder="CHOISIR NOM" required style="background:transparent; border:1px solid #0ff; color:white; padding:10px; margin-bottom:10px; display:block; width:220px;"><input type="password" name="p" placeholder="CHOISIR PASS" required style="background:transparent; border:1px solid #0ff; color:white; padding:10px; margin-bottom:20px; display:block; width:220px;"><button type="submit" style="background:#0ff; border:none; padding:10px; width:100%; font-weight:bold; cursor:pointer;">CRÉER COMPTE</button></form></body>"""
+    return """<body style="background:#020205; color:#0ff; font-family:'Orbitron'; display:flex; justify-content:center; align-items:center; height:100vh; margin:0;"><form method="POST" style="border:1px solid #0ff; padding:40px; background:rgba(0,255,255,0.05); text-align:center;"><h2>NOX_REGISTER</h2><input name="u" placeholder="NOM" required style="background:transparent; border:1px solid #0ff; color:white; padding:10px; margin-bottom:10px; display:block; width:220px;"><input type="password" name="p" placeholder="PASS" required style="background:transparent; border:1px solid #0ff; color:white; padding:10px; margin-bottom:20px; display:block; width:220px;"><button type="submit" style="background:#0ff; border:none; padding:10px; width:100%; font-weight:bold; cursor:pointer;">CRÉER COMPTE</button></form></body>"""
 
 @app.route('/api_data')
 def api_data():
