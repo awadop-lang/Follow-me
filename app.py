@@ -10,78 +10,82 @@ data_store = {"avatars": [], "region": "Abbas Way", "last_packet_time": 0}
 
 CSS = """
 .gradio-container { background-color: #0d1117 !important; color: #c9d1d9 !important; font-family: 'Inter', sans-serif !important; }
-.glass-card { background: #161b22 !important; border: 1px solid #30363d !important; border-radius: 12px; padding: 15px; box-shadow: 0 8px 32px rgba(0,0,0,0.5); }
-#map_container { height: 550px; width: 100%; border-radius: 10px; background: #000; border: 2px solid #58a6ff; }
+.glass-card { background: #161b22 !important; border: 1px solid #30363d !important; border-radius: 12px; padding: 15px; }
+#radar_bg { 
+    width: 512px; height: 512px; 
+    margin: 0 auto; 
+    border: 2px solid #58a6ff; 
+    position: relative; 
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-color: #000;
+}
+.dot { 
+    position: absolute; 
+    width: 12px; height: 12px; 
+    background: #00ffff; 
+    border: 2px solid white; 
+    border-radius: 50%; 
+    transform: translate(-50%, -50%);
+    box-shadow: 0 0 10px #00ffff;
+}
+.label { 
+    position: absolute; 
+    color: white; 
+    font-size: 10px; 
+    white-space: nowrap; 
+    background: rgba(0,0,0,0.6); 
+    padding: 2px 5px; 
+    border-radius: 4px;
+    transform: translate(-50%, -25px);
+}
 """
 
-def generate_map_html():
+def get_map_view():
     now = time.time()
     if now - data_store["last_packet_time"] > 60:
-        return "<div style='color:#8b949e; text-align:center; padding-top:200px;'>📡 SIGNAL SCANNER PERDU...</div>"
+        return "<div style='color:#8b949e; text-align:center; padding-top:200px;'>📡 ATTENTE SIGNAL...</div>"
 
     reg_url = data_store["region"].replace(" ", "%20")
+    # On utilise l'image globale de la sim (une seule image de 256x256 étirée)
+    map_img = f"https://map.secondlife.com/map-1-{reg_url}-1-128-128-objects.jpg"
     
-    markers_js = ""
+    dots_html = ""
     for a in data_store["avatars"]:
-        # Inversion de l'axe Y pour Leaflet (SL utilise 0 en bas, Leaflet 0 en haut en CRS.Simple)
-        leaflet_y = a['Y'] 
-        markers_js += f"""
-        L.circleMarker([{leaflet_y}, {a['X']}], {{
-            radius: 8, color: '#00ffff', weight: 2, opacity: 1, fillColor: '#00ffff', fillOpacity: 0.5
-        }}).addTo(map).bindTooltip('{a['Avatar']}', {{permanent: true, direction: 'top', className: 'map-label'}});
+        # Conversion coordonnées SL (0-256) vers Pixels (0-512)
+        left = (a['X'] / 256) * 512
+        # Inversion de l'axe Y (SL : 0 en bas, HTML : 0 en haut)
+        top = 512 - ((a['Y'] / 256) * 512)
+        
+        dots_html += f"""
+        <div class="dot" style="left: {left}px; top: {top}px;"></div>
+        <div class="label" style="left: {left}px; top: {top}px;">{a['Avatar']}</div>
         """
 
-    # Utilisation d'une URL de tuiles alternative et forçage du rafraîchissement JS
-    html_content = f"""
-    <div id="map_container"></div>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
-    <style>.map-label {{ background: rgba(0,0,0,0.7); color: #00ffff; border: none; font-weight: bold; }}</style>
-    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
-    <script>
-        var container = L.DomUtil.get('map_container');
-        if(container != null){{ container._leaflet_id = null; }}
-        
-        var map = L.map('map_container', {{
-            crs: L.CRS.Simple,
-            minZoom: -2,
-            maxZoom: 2,
-            zoomControl: true,
-            attributionControl: false
-        }});
-
-        // Tentative avec le sous-domaine 'img' qui est souvent plus stable en HTTPS
-        var slTileUrl = 'https://map.secondlife.com/map-1-{reg_url}-{{z}}-{{x}}-{{y}}-objects.jpg';
-        
-        L.tileLayer(slTileUrl, {{
-            tileSize: 256,
-            noWrap: true,
-            continuousWorld: true
-        }}).addTo(map);
-
-        map.setView([128, 128], 0);
-        {markers_js}
-    </script>
+    return f"""
+    <div id="radar_bg" style="background-image: url('{map_img}');">
+        {dots_html}
+    </div>
     """
-    return html_content
 
 def update_ui():
     now = time.time()
     online = (now - data_store["last_packet_time"] < 60)
     status = f"🟢 RÉGION : {data_store['region']}" if online else "🔴 SCANNER OFFLINE"
     df = pd.DataFrame(data_store["avatars"]) if data_store["avatars"] else pd.DataFrame(columns=["Avatar", "X", "Y", "Z"])
-    return generate_map_html(), df, status
+    return get_map_view(), df, status
 
 with gr.Blocks(css=CSS) as demo:
     gr.HTML("<h1 style='text-align:center; color:#f0f6fc;'>🛰️ SL TACTICAL LIVE MAP</h1>")
     with gr.Row():
         with gr.Column(scale=3, elem_classes="glass-card"):
-            map_view = gr.HTML(generate_map_html)
+            map_display = gr.HTML(get_map_view)
         with gr.Column(scale=2):
             with gr.Group(elem_classes="glass-card"):
                 connection_status = gr.Markdown("🔴 INITIALISATION")
                 target_table = gr.Dataframe(headers=["Avatar", "X", "Y", "Z"], interactive=False)
 
-    gr.Timer(4).tick(update_ui, outputs=[map_view, target_table, connection_status])
+    gr.Timer(4).tick(update_ui, outputs=[map_display, target_table, connection_status])
 
 @app.post("/update")
 async def update(request: Request):
