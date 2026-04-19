@@ -7,105 +7,167 @@ import os
 import uvicorn
 
 app = FastAPI()
-# On ajoute 'selected' pour savoir quel avatar doit "flasher"
 data_store = {"avatars": [], "last_packet_time": 0, "selected": None}
 
+# 1. CSS MODERN & SOBER (Glassmorphism & Shadows)
 CSS = """
-.gradio-container {background-color: #020a0d !important; color: #00ffff !important; font-family: 'Courier New', monospace;}
-.main-title { text-shadow: 0 0 10px #00ffff; border-bottom: 2px solid #00ffff; padding-bottom: 10px; }
-.stat-card { border: 1px solid #00ffff; padding: 10px; background: rgba(0,255,255,0.05); border-radius: 5px; }
-/* Style pour rendre le tableau plus compact */
-.table-container { font-size: 0.8em; }
+/* Import de la police moderne 'Inter' */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap');
+
+/* Style global */
+.gradio-container {
+    background-color: #0d1117 !important; /* Fond sombre doux style GitHub Dark */
+    font-family: 'Inter', -apple-system, sans-serif !important;
+    color: #c9d1d9 !important;
+}
+
+/* Titre principal moderne */
+.main-title {
+    font-weight: 600;
+    font-size: 2.2em;
+    color: #f0f6fc;
+    margin-bottom: 20px;
+    letter-spacing: -1px;
+}
+
+/* Style des cartes (Effet de Verre + Ombre douce) */
+.glass-card {
+    background: rgba(22, 27, 34, 0.7); /* Translucide */
+    border: 1px solid rgba(48, 54, 61, 0.8);
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5); /* Ombre douce portée */
+    backdrop-filter: blur(10px); /* Effet de flou dépoli (Glassmorphism) */
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* Effet de survol sur les cartes */
+.glass-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
+}
+
+/* Style compact pour le tableau */
+.table-container {
+    font-size: 0.9em;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+/* Texte de statut épuré */
+.stat-text {
+    font-size: 1.1em;
+    font-weight: 400;
+    color: #8b949e;
+}
+
+/* Label de cible sélectionnée */
+.selected-label {
+    color: #58a6ff; /* Bleu accent moderne */
+    font-weight: 600;
+}
 """
 
 def get_radar_plot():
     now = time.time()
     fig = go.Figure()
 
-    # Cercles de distance
-    for r in [50, 100, 150, 200, 256]:
+    # Cercles de distance minimalistes
+    for r in [50, 100, 150, 200]:
         fig.add_shape(type="circle", xref="x", yref="y", x0=-r, y0=-r, x1=r, y1=r, 
-                      line=dict(color="rgba(0, 255, 255, 0.15)", width=1))
+                      line=dict(color="rgba(48, 54, 61, 0.6)", width=1, dash='dot'))
 
-    status_text = "🟢 SIGNAL ACTIVE"
-    # Préparation des données pour le tableau
-    df_display = pd.DataFrame(columns=["Nom (Cliquer)", "X", "Y", "Z (Alt)"])
+    status_text = "🟢 SIGNAL ACTIF"
+    df_display = pd.DataFrame(columns=["Nom", "X", "Y", "Altitude"])
 
     if data_store["last_packet_time"] == 0 or (now - data_store["last_packet_time"] > 20):
-        status_text = "🔴 OFFLINE"
-        fig.add_annotation(text="WAITING FOR DATA...", x=0, y=0, showarrow=False, font=dict(size=20, color="red"))
+        status_text = "🔴 HORS LIGNE"
+        fig.add_annotation(text="ATTENTE DE DONNÉES...", x=0, y=0, showarrow=False, font=dict(size=18, color="#8b949e"))
     else:
         data = data_store["avatars"]
         if data:
             for d in data:
-                # Calcul de la position relative au centre de la sim (128, 128)
                 rel_x = d["X"] - 128
                 rel_y = d["Y"] - 128
                 
-                # Effet de Flash : Si l'avatar est sélectionné, il devient Rose et plus gros
+                # Interaction : Si sélectionné, changement de couleur sobre
                 is_selected = (d["Avatar"] == data_store["selected"])
-                color = "#ff00ff" if is_selected else "#00ffff"
-                size = 18 if is_selected else 12
-                symbol = "diamond" if is_selected else "triangle-up"
-
+                # Bleu électrique moderne si sélectionné, gris clair sinon
+                color = "#58a6ff" if is_selected else "#f0f6fc"
+                size = 14 if is_selected else 10
+                
+                # Points minamalistes (plus propre que des triangles)
                 fig.add_trace(go.Scatter(
                     x=[rel_x], y=[rel_y],
-                    mode='markers+text',
+                    mode='markers',
+                    marker=dict(size=size, color=color, 
+                                line=dict(width=2 if is_selected else 1, color="#f0f6fc")),
+                    hoverinfo="text",
                     text=[d["Avatar"]],
-                    textposition="top center",
-                    marker=dict(size=size, color=color, symbol=symbol, 
-                                line=dict(width=2, color="white" if is_selected else "rgba(0,0,0,0)")),
-                    hoverinfo="text"
                 ))
             
-            # Remplissage du tableau avec coordonnées complètes
+            # Préparation du tableau sobre
             df_display = pd.DataFrame([
-                {"Nom (Cliquer)": d["Avatar"], "X": round(d["X"],1), "Y": round(d["Y"],1), "Z (Alt)": round(d["Z"],1)} 
+                {"Nom": d["Avatar"], "X": round(d["X"],1), "Y": round(d["Y"],1), "Altitude": round(d["Z"],1)} 
                 for d in data
             ])
 
+    # Configuration du graphique ultra-sobre
     fig.update_layout(
         template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
         margin=dict(l=0, r=0, t=0, b=0),
-        xaxis=dict(range=[-140, 140], visible=False),
-        yaxis=dict(range=[-140, 140], visible=False, scaleanchor="x", scaleratio=1),
-        showlegend=False, width=550, height=550
+        xaxis=dict(range=[-140, 140], visible=False, zeroline=False),
+        yaxis=dict(range=[-140, 140], visible=False, zeroline=False, scaleanchor="x", scaleratio=1),
+        showlegend=False, width=580, height=580
     )
 
     return fig, df_display, status_text
 
-# Fonction déclenchée quand on clique sur une ligne du tableau
+# Fonction de sélection (Lock target)
 def on_select(evt: gr.SelectData):
-    # evt.value contient le nom de l'avatar cliqué
     data_store["selected"] = evt.value
-    return f"CIBLE VERROUILLÉE : {evt.value}"
+    # On retourne un HTML stylisé pour la cible
+    return f"CIBLE VERROUILLÉE : <span class='selected-label'>{evt.value}</span>"
 
+# 2. CONSTRUCTION DE L'INTERFACE MODERNE
 with gr.Blocks(css=CSS) as demo:
-    gr.HTML("<h1 class='main-title' style='text-align:center;'>🛰️ TACTICAL RADAR SYSTEM v4.5</h1>")
-    
-    with gr.Row():
-        with gr.Column(scale=3):
-            radar_map = gr.Plot(label="Local Scanner", show_label=False)
+    # Conteneur principal avec padding
+    with gr.Column(elem_id="main_container", padding=True):
+        gr.HTML("<h1 class='main-title' style='text-align:center;'>🛰️ Local Scanner System</h1>")
         
-        with gr.Column(scale=2):
-            with gr.Group(elem_classes="stat-card"):
-                connection_status = gr.Markdown("🟢 Recherche de signal...")
-                target_info = gr.Markdown("🎯 Cliquez sur un nom pour tracker")
+        with gr.Row():
+            # Colonne Radar (La carte flottante)
+            with gr.Column(scale=3, elem_classes="glass-card"):
+                radar_map = gr.Plot(label="Radar View", show_label=False)
             
-            gr.Markdown("### 👥 LOCALISATION COMPLÈTE")
-            # Le tableau devient interactif
-            target_table = gr.Dataframe(
-                headers=["Nom (Cliquer)", "X", "Y", "Z (Alt)"],
-                interactive=False,
-                elem_classes="table-container"
-            )
+            # Colonne Données
+            with gr.Column(scale=2):
+                # Carte de Statut (Verre)
+                with gr.Group(elem_classes="glass-card"):
+                    with gr.Row():
+                        gr.HTML("<span class='stat-text'>📟 État :</span>")
+                        connection_status = gr.Markdown("🟢 SIGNAL ACTIF", elem_classes="stat-text")
+                    
+                    # Information de Cible (Verre)
+                    gr.HTML("<hr style='border: 0; border-top: 1px solid rgba(48, 54, 61, 0.5); margin: 15px 0;'>")
+                    target_info = gr.HTML("<span class='stat-text'>🎯 Cliquez sur un nom pour tracker</span>")
+                
+                # Tableau (Épuré)
+                gr.HTML("<br>")
+                gr.Markdown("### 👥 Localisation Complète")
+                target_table = gr.Dataframe(
+                    headers=["Nom", "X", "Y", "Altitude"],
+                    interactive=False,
+                    elem_classes="table-container"
+                )
 
-    # Mise à jour automatique du radar
+    # Mise à jour automatique (toutes les 3 secondes)
     gr.Timer(3).tick(get_radar_plot, outputs=[radar_map, target_table, connection_status])
     
-    # Événement de clic sur le tableau
+    # Interaction : Sélection dans le tableau
     target_table.select(on_select, outputs=target_info)
 
+# 3. FASTAPI & UPLOAD (Inchangé)
 @app.post("/update")
 async def update(request: Request):
     body = await request.body()
