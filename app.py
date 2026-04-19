@@ -6,57 +6,82 @@ import os
 import uvicorn
 
 app = FastAPI()
-# Initialisation avec des données par défaut pour éviter les erreurs au démarrage
 data_store = {"avatars": [], "region": "Abbas Way", "last_packet_time": 0}
 
 CSS = """
-.gradio-container { background-color: #0d1117 !important; color: #c9d1d9 !important; font-family: sans-serif; }
-.glass-card { background: #161b22 !important; border: 1px solid #30363d !important; border-radius: 12px; padding: 20px; }
-#map_container { height: 500px; width: 100%; border-radius: 8px; background: #000; border: 1px solid #58a6ff; }
+.gradio-container { background-color: #0d1117 !important; color: #c9d1d9 !important; font-family: 'Inter', sans-serif !important; }
+.glass-card { background: #161b22 !important; border: 1px solid #30363d !important; border-radius: 12px; padding: 15px; box-shadow: 0 8px 32px rgba(0,0,0,0.5); }
+#map_container { height: 550px; width: 100%; border-radius: 10px; background: #000; border: 2px solid #58a6ff; }
 """
 
-def get_map():
+def generate_map_html():
     now = time.time()
-    # On laisse 60 secondes de marge pour le signal
     if now - data_store["last_packet_time"] > 60:
-        return "<div style='color:#8b949e; text-align:center; padding-top:150px;'>📡 ATTENTE DU SIGNAL DE SECOND LIFE...</div>"
+        return "<div style='color:#8b949e; text-align:center; padding-top:200px;'>📡 SIGNAL SCANNER PERDU...</div>"
 
     reg_url = data_store["region"].replace(" ", "%20")
     
-    # Construction des marqueurs
-    markers = ""
+    markers_js = ""
     for a in data_store["avatars"]:
-        markers += f"L.circleMarker([{a['Y']}, {a['X']}], {{radius: 7, color: '#58a6ff', fillOpacity: 0.8}}).addTo(map).bindTooltip('{a['Avatar']}', {{permanent: true}});"
+        # Inversion de l'axe Y pour Leaflet (SL utilise 0 en bas, Leaflet 0 en haut en CRS.Simple)
+        leaflet_y = a['Y'] 
+        markers_js += f"""
+        L.circleMarker([{leaflet_y}, {a['X']}], {{
+            radius: 8, color: '#00ffff', weight: 2, opacity: 1, fillColor: '#00ffff', fillOpacity: 0.5
+        }}).addTo(map).bindTooltip('{a['Avatar']}', {{permanent: true, direction: 'top', className: 'map-label'}});
+        """
 
-    return f"""
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
-    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    # Utilisation d'une URL de tuiles alternative et forçage du rafraîchissement JS
+    html_content = f"""
     <div id="map_container"></div>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    <style>.map-label {{ background: rgba(0,0,0,0.7); color: #00ffff; border: none; font-weight: bold; }}</style>
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
     <script>
-        var map = L.map('map_container', {{crs: L.CRS.Simple, minZoom: -1, maxZoom: 2, zoomControl: false}});
-        L.tileLayer('https://map.secondlife.com/map-1-{reg_url}-{{z}}-{{x}}-{{y}}-objects.jpg', {{tileSize: 256}}).addTo(map);
+        var container = L.DomUtil.get('map_container');
+        if(container != null){{ container._leaflet_id = null; }}
+        
+        var map = L.map('map_container', {{
+            crs: L.CRS.Simple,
+            minZoom: -2,
+            maxZoom: 2,
+            zoomControl: true,
+            attributionControl: false
+        }});
+
+        // Tentative avec le sous-domaine 'img' qui est souvent plus stable en HTTPS
+        var slTileUrl = 'https://map.secondlife.com/map-1-{reg_url}-{{z}}-{{x}}-{{y}}-objects.jpg';
+        
+        L.tileLayer(slTileUrl, {{
+            tileSize: 256,
+            noWrap: true,
+            continuousWorld: true
+        }}).addTo(map);
+
         map.setView([128, 128], 0);
-        {markers}
+        {markers_js}
     </script>
     """
+    return html_content
 
-def refresh():
+def update_ui():
     now = time.time()
-    status = f"🟢 RÉGION : {data_store['region']}" if (now - data_store["last_packet_time"] < 60) else "🔴 HORS LIGNE"
+    online = (now - data_store["last_packet_time"] < 60)
+    status = f"🟢 RÉGION : {data_store['region']}" if online else "🔴 SCANNER OFFLINE"
     df = pd.DataFrame(data_store["avatars"]) if data_store["avatars"] else pd.DataFrame(columns=["Avatar", "X", "Y", "Z"])
-    return get_map(), df, status
+    return generate_map_html(), df, status
 
 with gr.Blocks(css=CSS) as demo:
-    gr.HTML("<h1 style='text-align:center;'>SL TACTICAL SCANNER</h1>")
+    gr.HTML("<h1 style='text-align:center; color:#f0f6fc;'>🛰️ SL TACTICAL LIVE MAP</h1>")
     with gr.Row():
         with gr.Column(scale=3, elem_classes="glass-card"):
-            map_html = gr.HTML(get_map)
+            map_view = gr.HTML(generate_map_html)
         with gr.Column(scale=2):
             with gr.Group(elem_classes="glass-card"):
-                status_ui = gr.Markdown("📡 Synchronisation...")
-                table_ui = gr.Dataframe(headers=["Avatar", "X", "Y", "Z"], interactive=False)
+                connection_status = gr.Markdown("🔴 INITIALISATION")
+                target_table = gr.Dataframe(headers=["Avatar", "X", "Y", "Z"], interactive=False)
 
-    gr.Timer(3).tick(refresh, outputs=[map_html, table_ui, status_ui])
+    gr.Timer(4).tick(update_ui, outputs=[map_view, target_table, connection_status])
 
 @app.post("/update")
 async def update(request: Request):
@@ -67,14 +92,14 @@ async def update(request: Request):
             data_store["last_packet_time"] = time.time()
             reg, avs = content.split(":")
             data_store["region"] = reg.strip()
-            new_list = []
+            new_data = []
             if avs != "empty":
                 for entry in avs.split(";"):
-                    p = entry.split("|")
-                    if len(p) == 2:
-                        name, c = p[0], p[1].split(",")
-                        new_list.append({"Avatar": name, "X": float(c[0]), "Y": float(c[1]), "Z": float(c[2])})
-            data_store["avatars"] = new_list
+                    parts = entry.split("|")
+                    if len(parts) == 2:
+                        name, c = parts[0], parts[1].split(",")
+                        new_data.append({"Avatar": name, "X": float(c[0]), "Y": float(c[1]), "Z": round(float(c[2]), 1)})
+            data_store["avatars"] = new_data
         return {"status": "ok"}
     except:
         return {"status": "error"}
